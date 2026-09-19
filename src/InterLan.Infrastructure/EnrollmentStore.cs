@@ -904,6 +904,89 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         return rows;
     }
 
+    public async Task RevokeOwnDeviceAsync(
+        Guid actorUserId,
+        Guid actorSessionId,
+        Guid deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var authority = connection.CreateCommand())
+        {
+            authority.Transaction = transaction;
+            authority.CommandText =
+                """
+                SELECT COUNT(1)
+                FROM device_sessions s
+                JOIN devices d ON d.device_id = s.device_id
+                WHERE s.session_id = $sessionId
+                  AND s.user_id = $userId
+                  AND s.device_id = $deviceId
+                  AND s.revoked_utc IS NULL
+                  AND s.expires_utc > $now
+                  AND d.revoked_utc IS NULL;
+                """;
+            authority.Parameters.AddWithValue("$sessionId", actorSessionId.ToString("D"));
+            authority.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            authority.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            authority.Parameters.AddWithValue("$now", now.ToString("O"));
+
+            if (Convert.ToInt32(await authority.ExecuteScalarAsync(cancellationToken)) != 1)
+                throw new UnauthorizedAccessException(
+                    "Active session does not own this device.");
+        }
+
+        await using (var revokeDevice = connection.CreateCommand())
+        {
+            revokeDevice.Transaction = transaction;
+            revokeDevice.CommandText =
+                """
+                UPDATE devices
+                SET revoked_utc = $utc
+                WHERE device_id = $deviceId
+                  AND user_id = $userId
+                  AND revoked_utc IS NULL;
+                """;
+            revokeDevice.Parameters.AddWithValue("$utc", now.ToString("O"));
+            revokeDevice.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            revokeDevice.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+
+            if (await revokeDevice.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new UnauthorizedAccessException("Active device was not found.");
+        }
+
+        await using (var revokeSessions = connection.CreateCommand())
+        {
+            revokeSessions.Transaction = transaction;
+            revokeSessions.CommandText =
+                """
+                UPDATE device_sessions
+                SET revoked_utc = $utc
+                WHERE device_id = $deviceId
+                  AND revoked_utc IS NULL;
+                """;
+            revokeSessions.Parameters.AddWithValue("$utc", now.ToString("O"));
+            revokeSessions.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            await revokeSessions.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "SELF_DEVICE_REVOKED",
+            "DEVICE",
+            deviceId,
+            "{}",
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+    }
+
     public async Task RevokeDeviceAsync(
         Guid ownerUserId,
         Guid deviceId,
