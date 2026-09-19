@@ -123,6 +123,19 @@ try
     var ac = await chat.GetOrCreateDirectConversationAsync(alice, carol);
     Check(ac.ConversationId != ab1.ConversationId, "different pair gets different conversation");
 
+    var bc = await chat.GetOrCreateDirectConversationAsync(bob, carol);
+
+    var normalizedMessage = await chat.SendDirectMessageAsync(
+        bob,
+        bc.ConversationId,
+        new SendMessageRequest(
+            Guid.NewGuid(),
+            "  Cafe\u0301  "));
+
+    Check(
+        normalizedMessage.Message.Body == "Café",
+        "message text is trimmed and normalized to Unicode NFC");
+
     var listed = await chat.ListDirectConversationsAsync(alice);
     Check(listed.Count == 2, "direct conversation listing is membership scoped");
 
