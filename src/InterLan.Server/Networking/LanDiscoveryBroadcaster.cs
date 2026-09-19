@@ -8,6 +8,7 @@ namespace InterLan.Server.Networking;
 
 public sealed class LanDiscoveryBroadcaster(
     IServerIdentityStore identities,
+    EnrollmentStore enrollment,
     ServerCertificateDescriptor certificate,
     IConfiguration configuration,
     ILogger<LanDiscoveryBroadcaster> logger) : BackgroundService
@@ -25,7 +26,8 @@ public sealed class LanDiscoveryBroadcaster(
             try
             {
                 var identity = await identities.GetAsync(stoppingToken);
-                if (identity is not null)
+                var discoveryEnabled = await enrollment.IsDiscoveryEnabledAsync(stoppingToken);
+                if (identity is not null && discoveryEnabled)
                 {
                     var port = configuration.GetValue("InterLan:Server:Port", 7443);
                     var announcement = new DiscoveryAnnouncement(
