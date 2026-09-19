@@ -50,13 +50,13 @@ using var handler = new HttpClientHandler
 using var client = new HttpClient(handler)
 {
     BaseAddress = new Uri($"https://127.0.0.1:{port}"),
-    Timeout = TimeSpan.FromSeconds(3)
+    Timeout = TimeSpan.FromSeconds(1)
 };
 
 try
 {
     var ready = false;
-    for (var attempt = 0; attempt < 40; attempt++)
+    for (var attempt = 0; attempt < 30; attempt++)
     {
         if (process.HasExited)
             break;
@@ -81,7 +81,6 @@ try
     if (!ready)
     {
         Console.Error.WriteLine("FAIL HTTPS server did not become healthy.");
-        Console.Error.WriteLine(await process.StandardError.ReadToEndAsync());
         return 1;
     }
 
