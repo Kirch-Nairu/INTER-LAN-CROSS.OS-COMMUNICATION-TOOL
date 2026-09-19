@@ -49,6 +49,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Direct conversation response was empty.");
     }
 
+    public async Task<IReadOnlyList<DirectConversationSummaryResponse>> ListDirectConversationSummariesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<DirectConversationSummaryResponse[]>(
+            "/api/v1/direct/summaries",
+            cancellationToken)
+            ?? Array.Empty<DirectConversationSummaryResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
