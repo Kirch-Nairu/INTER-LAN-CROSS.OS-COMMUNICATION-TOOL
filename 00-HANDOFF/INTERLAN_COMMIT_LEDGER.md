@@ -10,96 +10,83 @@ No fake commits. No whitespace farming. No empty commits.
 | --- | --- | ---: |
 | P0 | Accepted, squash-merged | historical exception |
 | P1 | Accepted, squash-merged | historical exception |
+| P2 | Accepted onto current main authority | preserved history exists on accepted main lineage |
 
 ## Active campaign
 
-| Phase | Target | Current | Status |
+| Phase | Target | Current observed baseline | Status |
 | --- | ---: | ---: | --- |
-| P2 | 300+ | 100 commits ahead of accepted main after this architecture-review commit | active — C100 replay required |
-| P3 | 300+ | 0 | blocked on accepted P2 merge |
+| P3 | 300+ | 65 commits ahead of accepted main at pre-governance source anchor | active — source implementation + governance reconciliation |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
 | P6 | 300+ | 0 | not started |
 | P7 | 300+ | 0 | not started |
 
-P2 accepted predecessor:
+Accepted main observed before P3 governance reconciliation:
 
-`main@91c010dd3bd448fc9bd5ec9159e94262569e3e79`
+`main@d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`
 
-P2 C075 source checkpoint:
+P3 active branch:
 
-`926ffffdbc437a85ebb1c9109ee85acc2a524383`
+`KIRCH-INTERLAN-P3-GROUP-CHAT`
 
-The two repository-state/ledger commits immediately after that checkpoint are part of the meaningful phase history.
+P3 pre-governance source anchor:
 
-## Checkpoints
+`939fa64e1613ded90366c01d18928493024f7b0b`
 
-- C025: passed by implementation history before formal campaign ledger.
-- C050: crossed during structural hardening wave; superseded by immediate C075 local replay.
-- C075: **PASS — operator-local Windows replay at `3a1805fb7c985b83ca72bd2c6f4353abcc435f1e`.**
-- C100: **ARCHITECTURE REVIEW ISSUED — LOCAL REPLAY REQUIRED.**
-- C125: focused phase checkpoint.
-- C150: restart/persistence/migration replay.
-- C175: focused phase checkpoint.
-- C200: architecture/invariant review.
-- C225: focused phase checkpoint.
-- C250: restart/persistence/migration replay.
-- C275: focused phase checkpoint.
-- C300: full phase acceptance.
+At that anchor:
+- ahead of main: 65
+- behind main: 0
 
-## C075 local replay result
+The exact current commit count must be re-observed from Git/GitHub after later commits. Do not make this tracked file chase its own containing commit SHA.
 
-PASS:
-- full solution build;
-- P1 identity/pairing;
-- P1 real HTTPS network smoke;
-- P2 core DM/persistence;
-- P2 realtime/pairing/rotation/revocation.
+## P3 completed source slices observed
 
-C075 is closed.
+- group metadata policy;
+- creator OWNER authority;
+- membership add/remove/restore;
+- role promotion/demotion boundaries;
+- durable group events/audit;
+- message persistence/idempotency/replies;
+- deterministic history/cursor catch-up;
+- reverse-paged recent history/backfill;
+- realtime current-membership targeting;
+- typing authorization;
+- receipts;
+- sender-only edit/delete/tombstones;
+- typed HTTP/realtime client surfaces;
+- migration checks;
+- P3 core checks;
+- P3 realtime smoke;
+- P3 concurrency checks;
+- aggregate suite registration.
 
-## Current completed slices
+## P3 evidence boundary
 
-- pairing/session persistence;
-- DM persistence/realtime/catch-up;
-- SQLite concurrency baseline;
-- rate-limit partition foundation;
-- realtime revocation plumbing;
-- recipient receipt semantics;
-- multi-device identity;
-- credential rotation lifecycle;
-- canonical runtime settings foundation;
-- reusable server-host integration spine;
-- verification solution topology;
-- shared process/network testing foundation.
+At the governance reconciliation:
+- source state was inspected;
+- no build or P3 executable suite was run as part of the reconciliation;
+- P3 is not accepted or promoted.
 
-## C100 source authority
+## Campaign checkpoints
 
-`bc56986096f4e40690f8bb35ebfb3d7666363450`
+The 25/50/100 cadence remains a review cadence, not a reason to stop production coding for CI babysitting.
 
-C075→C100 completed:
-1. shared-harness migration for P1 network smoke;
-2. DM concurrency/idempotency hardening;
-3. rate-limit partition proof;
-4. historical migration fixtures and upgrade checks;
-5. aggregate local suite runner;
-6. desktop in-process owner-host lifecycle proof.
-
-C100 replay command:
-`dotnet build InterLan.sln -c Release`
-then
-`dotnet run --project tools/InterLan.SuiteChecks/InterLan.SuiteChecks.csproj -c Release --no-build`
-
-Do not advance into another large wave until this replay is clean.
+For P3:
+- C025: crossed in implementation history; no independent acceptance implied.
+- C050: crossed in implementation history; no independent acceptance implied.
+- C075: upcoming meaningful-commit review boundary after governance commits.
+- C100: architecture/invariant review boundary.
+- later checkpoints continue per `INTERLAN_V1_CODE_CAMPAIGN.md`.
 
 ## Ledger rule
 
-After each coherent implementation wave, update:
-- current phase commit count;
-- latest head;
-- last completed slice;
+After each coherent implementation wave, reconcile:
+- current phase and branch;
+- observed ahead/behind count;
+- source slices completed;
 - next slice;
-- known blocker count;
-- last local checkpoint result.
+- blocker count;
+- validation status.
 
-Do not rewrite prior accepted ledger history.
+Observable Git/runtime wins over stale ledger text.
