@@ -297,6 +297,48 @@ public sealed class ChatStore(SqliteDatabase database)
         return rows;
     }
 
+    public async Task<DirectConversationPreferenceResponse> GetDirectConversationPreferenceAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT pinned_utc, muted_until_utc, archived_utc, updated_utc
+            FROM direct_conversation_preferences
+            WHERE conversation_id = $conversationId
+              AND user_id = $userId;
+            """;
+        command.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+        command.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return new DirectConversationPreferenceResponse(
+                conversationId,
+                IsPinned: false,
+                MutedUntilUtc: null,
+                IsArchived: false,
+                UpdatedUtc: DateTimeOffset.MinValue);
+        }
+
+        return new DirectConversationPreferenceResponse(
+            conversationId,
+            !reader.IsDBNull(0),
+            reader.IsDBNull(1) ? null : DateTimeOffset.Parse(reader.GetString(1)),
+            !reader.IsDBNull(2),
+            DateTimeOffset.Parse(reader.GetString(3)));
+    }
+
     public async Task<PersistedMessageResult> SendDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
