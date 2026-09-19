@@ -334,6 +334,32 @@ app.MapPost("/api/v1/sessions/{sessionId:guid}/revoke", async (
     }
 });
 
+app.MapPost("/api/v1/devices/{deviceId:guid}/credential/rotate", async (
+    Guid deviceId,
+    HttpContext context,
+    EnrollmentStore enrollment,
+    RealtimeConnectionRegistry realtimeConnections,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(context, enrollment, cancellationToken);
+        var session = await enrollment.RotateDeviceCredentialAsync(
+            principal.UserId,
+            principal.SessionId,
+            deviceId,
+            TimeSpan.FromHours(12),
+            cancellationToken);
+
+        realtimeConnections.RevokeDevice(deviceId);
+        return Results.Ok(session);
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Unauthorized();
+    }
+}).RequireRateLimiting("auth");
+
 app.MapPost("/api/v1/devices/{deviceId:guid}/revoke", async (
     Guid deviceId,
     HttpContext context,
