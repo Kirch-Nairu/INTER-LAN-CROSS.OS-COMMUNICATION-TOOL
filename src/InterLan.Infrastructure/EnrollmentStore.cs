@@ -502,6 +502,15 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         transaction.Commit();
     }
 
+    public async Task<bool> IsDiscoveryEnabledAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT discovery_enabled FROM server_settings WHERE singleton_key = 1;";
+        var value = await command.ExecuteScalarAsync(cancellationToken);
+        return value is not null && value is not DBNull && Convert.ToInt32(value) == 1;
+    }
+
     private static async Task RequireOwnerAsync(
         SqliteConnection connection,
         Guid ownerUserId,
