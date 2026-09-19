@@ -363,7 +363,8 @@ public sealed class ChatStore(SqliteDatabase database)
                            edited_utc, deleted_utc
                 ) VALUES (
                     $messageId, 'DIRECT', $scopeId, $sender,
-                    $clientMessageId, $body, $replyTo, $created
+                    $clientMessageId, $body, $replyTo, $created,
+                    NULL, NULL
                 );
                 """;
             insert.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
