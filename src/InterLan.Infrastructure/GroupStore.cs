@@ -8,6 +8,9 @@ public sealed class GroupStore(SqliteDatabase database)
 {
     public const int MaxMessageLength = 4_000;
     public const int MaxMessagePageSize = 200;
+
+    private static SqliteTransaction BeginWriteTransaction(SqliteConnection connection) =>
+        connection.BeginTransaction(deferred: false);
     public async Task<GroupDetailsResponse> CreateGroupAsync(
         Guid actorUserId,
         CreateGroupRequest request,
@@ -22,7 +25,7 @@ public sealed class GroupStore(SqliteDatabase database)
             actorUserId,
             cancellationToken);
 
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
         var groupId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
@@ -224,7 +227,7 @@ public sealed class GroupStore(SqliteDatabase database)
         var topic = GroupTextPolicy.NormalizeTopic(request.Topic);
 
         await using var connection = database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         var role = await RequireActiveGroupMemberAsync(
             connection,
@@ -305,7 +308,7 @@ public sealed class GroupStore(SqliteDatabase database)
             request.UserId,
             cancellationToken);
 
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         var actorRole = await RequireActiveGroupMemberAsync(
             connection,
@@ -432,7 +435,7 @@ public sealed class GroupStore(SqliteDatabase database)
             throw new ArgumentException("Group member user ID is required.", nameof(targetUserId));
 
         await using var connection = database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         var actorRole = await RequireActiveGroupMemberAsync(
             connection,
@@ -534,7 +537,7 @@ public sealed class GroupStore(SqliteDatabase database)
         var requestedRole = NormalizeAssignableGroupRole(request.Role);
 
         await using var connection = database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         var actorRole = await RequireActiveGroupMemberAsync(
             connection,
@@ -643,7 +646,7 @@ public sealed class GroupStore(SqliteDatabase database)
             MaxMessageLength);
 
         await using var connection = database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         await RequireActiveGroupMemberAsync(
             connection,
@@ -1161,7 +1164,7 @@ public sealed class GroupStore(SqliteDatabase database)
             MaxMessageLength);
 
         await using var connection = database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         await RequireActiveGroupMemberAsync(
             connection,
@@ -1230,7 +1233,7 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = BeginWriteTransaction(connection);
 
         await RequireActiveGroupMemberAsync(
             connection,
