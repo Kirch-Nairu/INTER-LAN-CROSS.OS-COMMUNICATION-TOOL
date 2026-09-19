@@ -297,6 +297,27 @@ try
         concurrentHistory.Count == 20,
         "concurrent unique sends remain fully readable");
 
+    var firstPage = await chat.GetDirectHistoryPageAsync(
+        carol,
+        ac.ConversationId,
+        null,
+        5);
+
+    var secondPage = await chat.GetDirectHistoryPageAsync(
+        carol,
+        ac.ConversationId,
+        firstPage.NextAfterMessageId,
+        5);
+
+    Check(
+        firstPage.Items.Count == 5 &&
+        firstPage.HasMore &&
+        secondPage.Items.Count == 5 &&
+        !firstPage.Items.Select(message => message.MessageId)
+            .Intersect(secondPage.Items.Select(message => message.MessageId))
+            .Any(),
+        "bounded cursor pages advance without overlap");
+
     var duplicateClientMessageId = Guid.NewGuid();
     var duplicateRace = await Task.WhenAll(
         Enumerable.Range(0, 12)
