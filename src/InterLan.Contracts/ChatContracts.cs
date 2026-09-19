@@ -46,7 +46,10 @@ public sealed record DirectConversationSummaryResponse(
     UserSummaryResponse OtherUser,
     DateTimeOffset CreatedUtc,
     MessageResponse? LastMessage,
-    int UnreadCount);
+    int UnreadCount,
+    bool IsPinned = false,
+    DateTimeOffset? MutedUntilUtc = null,
+    bool IsArchived = false);
 
 public sealed record MessagePageResponse(
     IReadOnlyList<MessageResponse> Items,
