@@ -600,6 +600,28 @@ public sealed class ChatStore(SqliteDatabase database)
             items);
     }
 
+    public async Task<MessageResponse> GetDirectMessageByIdAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        return await GetDirectMessageAsync(
+            connection,
+            transaction: null,
+            conversationId,
+            messageId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Message not found.");
+    }
+
     public async Task<MessageResponse> EditDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
