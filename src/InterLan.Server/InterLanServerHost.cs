@@ -10,11 +10,22 @@ namespace InterLan.Server;
 
 public static class InterLanServerHost
 {
+    public static Task<WebApplication> BuildAsync(
+        string[] args,
+        CancellationToken cancellationToken = default) =>
+        BuildAsync(args, new InterLanServerHostOptions(), cancellationToken);
+
     public static async Task<WebApplication> BuildAsync(
         string[] args,
+        InterLanServerHostOptions hostOptions,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(hostOptions);
+
         var builder = WebApplication.CreateBuilder(args);
+
+        if (hostOptions.ConfigurationOverrides is { Count: > 0 })
+            builder.Configuration.AddInMemoryCollection(hostOptions.ConfigurationOverrides);
 
         // Browser SignalR transports may need the standard access_token query parameter.
         // Suppress framework request-start logging so bearer material is not written to logs.
@@ -22,7 +33,9 @@ public static class InterLanServerHost
             "Microsoft.AspNetCore.Hosting.Diagnostics",
             LogLevel.Warning);
 
-        var dataDirectory = Environment.GetEnvironmentVariable("INTERLAN_DATA_DIR");
+        var dataDirectory = hostOptions.DataDirectory;
+        if (string.IsNullOrWhiteSpace(dataDirectory))
+            dataDirectory = Environment.GetEnvironmentVariable("INTERLAN_DATA_DIR");
         if (string.IsNullOrWhiteSpace(dataDirectory))
             dataDirectory = Path.Combine(AppContext.BaseDirectory, "data");
 
