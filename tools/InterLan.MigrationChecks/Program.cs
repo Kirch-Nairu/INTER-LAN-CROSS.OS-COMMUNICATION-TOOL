@@ -109,6 +109,32 @@ foreach (var historicalMigration in historicalMigrations)
             directColumns.Contains("pair_key"),
             $"{historicalMigration} upgrades canonical DM schema");
 
+        var requiredIndexes = new[]
+        {
+            "ix_direct_conversation_members_user",
+            "ix_messages_scope_order",
+            "ix_message_receipts_user_read",
+            "ix_devices_user_revoked",
+            "ix_device_sessions_device_active"
+        };
+
+        foreach (var indexName in requiredIndexes)
+        {
+            await using var index = connection.CreateCommand();
+            index.CommandText =
+                """
+                SELECT COUNT(1)
+                FROM sqlite_master
+                WHERE type = 'index'
+                  AND name = $name;
+                """;
+            index.Parameters.AddWithValue("$name", indexName);
+
+            Check(
+                Convert.ToInt32(await index.ExecuteScalarAsync()) == 1,
+                $"{historicalMigration} upgrades required index {indexName}");
+        }
+
         await database.InitializeAsync();
 
         await using var idempotentConnection = database.OpenConnection();
