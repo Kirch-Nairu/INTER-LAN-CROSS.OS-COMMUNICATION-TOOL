@@ -328,6 +328,25 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Direct conversation preference response was empty.");
     }
 
+    public async Task<DirectConversationPreferenceResponse> UpdateDirectConversationPreferenceAsync(
+        Guid conversationId,
+        UpdateDirectConversationPreferenceRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PutAsJsonAsync(
+            $"/api/v1/direct/{conversationId:D}/preference",
+            request,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<DirectConversationPreferenceResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Direct conversation preference response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
