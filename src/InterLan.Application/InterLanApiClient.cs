@@ -240,6 +240,20 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Conversation read response was empty.");
     }
 
+    public async Task LogoutAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            "/api/v1/auth/logout",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        _httpClient.DefaultRequestHeaders.Authorization = null;
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
