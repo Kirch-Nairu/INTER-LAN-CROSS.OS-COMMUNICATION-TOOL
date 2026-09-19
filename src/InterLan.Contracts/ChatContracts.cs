@@ -81,3 +81,9 @@ public sealed record RecentMessagePageResponse(
     IReadOnlyList<MessageResponse> Items,
     Guid? OlderBeforeMessageId,
     bool HasOlder);
+
+public sealed record DirectConversationActivityResponse(
+    Guid ConversationId,
+    DateTimeOffset ActivityUtc,
+    Guid? LastMessageId,
+    int UnreadCount);
