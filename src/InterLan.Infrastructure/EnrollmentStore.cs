@@ -788,12 +788,21 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         if (!await reader.ReadAsync(cancellationToken))
             return null;
 
-        return new SessionPrincipal(
+        var principal = new SessionPrincipal(
             Guid.Parse(reader.GetString(0)),
             Guid.Parse(reader.GetString(1)),
             reader.IsDBNull(2) ? null : Guid.Parse(reader.GetString(2)),
             reader.GetString(4),
             DateTimeOffset.Parse(reader.GetString(3)));
+
+        await reader.DisposeAsync();
+        await TouchSessionActivityAsync(
+            connection,
+            principal,
+            now,
+            cancellationToken);
+
+        return principal;
     }
 
     private static async Task TouchSessionActivityAsync(
