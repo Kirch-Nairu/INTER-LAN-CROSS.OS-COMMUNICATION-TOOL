@@ -31,6 +31,24 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? Array.Empty<UserSummaryResponse>();
     }
 
+    public async Task<DirectConversationResponse> OpenDirectConversationAsync(
+        Guid otherUserId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            "/api/v1/direct",
+            new OpenDirectConversationRequest(otherUserId),
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<DirectConversationResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Direct conversation response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
