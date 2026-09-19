@@ -119,9 +119,9 @@ try
     }
 
     Console.WriteLine($"PASS HTTPS Kestrel health endpoint via {activeBase}");
-    client.BaseAddress = activeBase!;
+    Uri At(string path) => new(activeBase!, path);
 
-    var before = await client.GetFromJsonAsync<JsonElement>("/api/v1/server/info");
+    var before = await client.GetFromJsonAsync<JsonElement>(At("/api/v1/server/info"));
     var beforeServer = before.GetProperty("server");
     if (beforeServer.GetProperty("configured").GetBoolean())
     {
@@ -138,7 +138,7 @@ try
 
     Console.WriteLine("PASS server info publishes pairing fingerprint");
 
-    using var bootstrap = await client.PostAsJsonAsync("/api/v1/bootstrap/server", new
+    using var bootstrap = await client.PostAsJsonAsync(At("/api/v1/bootstrap/server"), new
     {
         serverName = "Network Smoke",
         ownerUsername = "owner",
@@ -170,7 +170,7 @@ try
 
     Console.WriteLine("PASS duplicate bootstrap fails closed");
 
-    var after = await client.GetFromJsonAsync<JsonElement>("/api/v1/server/info");
+    var after = await client.GetFromJsonAsync<JsonElement>(At("/api/v1/server/info"));
     if (!after.GetProperty("server").GetProperty("configured").GetBoolean())
     {
         Console.Error.WriteLine("FAIL configured server state not visible after bootstrap");
