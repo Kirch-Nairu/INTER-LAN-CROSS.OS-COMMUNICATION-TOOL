@@ -1,3 +1,4 @@
+using InterLan.Application;
 using InterLan.Contracts;
 using InterLan.Infrastructure;
 
