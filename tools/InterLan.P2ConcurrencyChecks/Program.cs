@@ -76,6 +76,21 @@ try
     Check(
         uniqueHistory.Count == 200,
         "concurrent write history contains every unique message");
+
+    var duplicateClientId = Guid.NewGuid();
+    var duplicateWrites = await Task.WhenAll(
+        Enumerable.Range(0, 64)
+            .Select(_ => chat.SendDirectMessageAsync(
+                alice,
+                conversation.ConversationId,
+                new SendMessageRequest(
+                    duplicateClientId,
+                    "duplicate-race"))));
+
+    Check(
+        duplicateWrites.Count(write => write.Created) == 1 &&
+        duplicateWrites.Select(write => write.Message.MessageId).Distinct().Count() == 1,
+        "sixty-four concurrent duplicate writes collapse to one message");
 }
 finally
 {
