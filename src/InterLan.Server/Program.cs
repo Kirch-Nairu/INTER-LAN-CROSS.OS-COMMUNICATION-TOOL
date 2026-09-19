@@ -132,6 +132,7 @@ app.MapPost("/api/v1/bootstrap/server", async (
     HttpContext context,
     BootstrapServerRequest request,
     EnrollmentStore enrollment,
+    ServerRuntimeSettings settings,
     ServerCertificateDescriptor cert,
     CancellationToken cancellationToken) =>
 {
@@ -146,9 +147,9 @@ app.MapPost("/api/v1/bootstrap/server", async (
             request.OwnerUsername,
             request.OwnerDisplayName,
             request.OwnerPassword,
-            Path.Combine(dataDirectory, "files"),
-            port,
-            builder.Configuration.GetValue("InterLan:Server:DiscoveryEnabled", true),
+            settings.StoragePath,
+            settings.Port,
+            settings.DiscoveryEnabled,
             cancellationToken);
 
         return Results.Ok(new BootstrapServerResponse(
