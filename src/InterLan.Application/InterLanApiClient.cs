@@ -154,6 +154,26 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Realtime ticket response was empty.");
     }
 
+    public async Task<MessageResponse> EditDirectMessageAsync(
+        Guid conversationId,
+        Guid messageId,
+        string body,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PutAsJsonAsync(
+            $"/api/v1/direct/{conversationId:D}/messages/{messageId:D}",
+            new EditMessageRequest(body),
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Edited message response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
