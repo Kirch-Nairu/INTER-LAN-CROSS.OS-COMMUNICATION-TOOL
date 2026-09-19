@@ -175,7 +175,8 @@ public sealed class ChatStore(SqliteDatabase database)
                 last.CommandText =
                     """
                     SELECT message_id, scope_type, scope_id, sender_user_id,
-                           client_message_id, body, reply_to_message_id, created_utc
+                           client_message_id, body, reply_to_message_id, created_utc,
+                           edited_utc, deleted_utc
                     FROM messages
                     WHERE scope_type = 'DIRECT'
                       AND scope_id = $conversationId
@@ -298,7 +299,8 @@ public sealed class ChatStore(SqliteDatabase database)
                 """
                 INSERT OR IGNORE INTO messages (
                     message_id, scope_type, scope_id, sender_user_id,
-                    client_message_id, body, reply_to_message_id, created_utc
+                    client_message_id, body, reply_to_message_id, created_utc,
+                           edited_utc, deleted_utc
                 ) VALUES (
                     $messageId, 'DIRECT', $scopeId, $sender,
                     $clientMessageId, $body, $replyTo, $created
@@ -392,7 +394,8 @@ public sealed class ChatStore(SqliteDatabase database)
         command.CommandText =
             """
             SELECT message_id, scope_type, scope_id, sender_user_id,
-                   client_message_id, body, reply_to_message_id, created_utc
+                   client_message_id, body, reply_to_message_id, created_utc,
+                           edited_utc, deleted_utc
             FROM messages
             WHERE scope_type = 'DIRECT'
               AND scope_id = $conversationId
@@ -682,7 +685,8 @@ public sealed class ChatStore(SqliteDatabase database)
         command.CommandText =
             """
             SELECT message_id, scope_type, scope_id, sender_user_id,
-                   client_message_id, body, reply_to_message_id, created_utc
+                   client_message_id, body, reply_to_message_id, created_utc,
+                           edited_utc, deleted_utc
             FROM messages
             WHERE sender_user_id = $sender
               AND client_message_id = $clientMessageId;
