@@ -50,12 +50,22 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
         _connection.On<MessageReceiptsChangedResponse>(
             "ReceiptUpdated",
             receipt => ReceiptUpdated?.Invoke(receipt));
+
+        _connection.On<UserPresenceResponse>(
+            "PresenceChanged",
+            presence => PresenceChanged?.Invoke(presence));
+
+        _connection.On<TypingIndicatorResponse>(
+            "TypingChanged",
+            typing => TypingChanged?.Invoke(typing));
     }
 
     public event Action<MessageResponse>? MessageCreated;
     public event Action<MessageResponse>? MessageEdited;
     public event Action<MessageDeletedResponse>? MessageDeleted;
     public event Action<MessageReceiptsChangedResponse>? ReceiptUpdated;
+    public event Action<UserPresenceResponse>? PresenceChanged;
+    public event Action<TypingIndicatorResponse>? TypingChanged;
 
     public HubConnectionState State => _connection.State;
 
