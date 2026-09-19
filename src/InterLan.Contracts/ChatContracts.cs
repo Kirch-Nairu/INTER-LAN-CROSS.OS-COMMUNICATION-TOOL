@@ -102,3 +102,8 @@ public sealed record UpdateDirectConversationPreferenceRequest(
     bool IsPinned,
     DateTimeOffset? MutedUntilUtc,
     bool IsArchived);
+
+public sealed record DirectMessageSearchResponse(
+    Guid ConversationId,
+    string Query,
+    IReadOnlyList<MessageResponse> Items);
