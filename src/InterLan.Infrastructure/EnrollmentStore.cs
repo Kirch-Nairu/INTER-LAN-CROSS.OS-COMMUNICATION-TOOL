@@ -502,6 +502,29 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         transaction.Commit();
     }
 
+    public async Task RevokeSessionAsync(
+        Guid ownerUserId,
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireOwnerAsync(connection, ownerUserId, cancellationToken);
+        using var transaction = connection.BeginTransaction();
+        var now = DateTimeOffset.UtcNow;
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            "UPDATE device_sessions SET revoked_utc = $utc WHERE session_id = $id AND revoked_utc IS NULL;";
+        command.Parameters.AddWithValue("$utc", now.ToString("O"));
+        command.Parameters.AddWithValue("$id", sessionId.ToString("D"));
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new KeyNotFoundException("Active session not found.");
+
+        await AppendAuditAsync(connection, transaction, ownerUserId, "SESSION_REVOKED", "SESSION", sessionId, "{}", now, cancellationToken);
+        transaction.Commit();
+    }
+
     public async Task<bool> IsDiscoveryEnabledAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
