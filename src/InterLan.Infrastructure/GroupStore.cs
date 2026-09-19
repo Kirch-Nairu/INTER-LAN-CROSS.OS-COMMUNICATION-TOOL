@@ -62,6 +62,27 @@ public sealed class GroupStore(SqliteDatabase database)
             await owner.ExecuteNonQueryAsync(cancellationToken);
         }
 
+        await AppendGroupEventAsync(
+            connection,
+            transaction,
+            groupId,
+            actorUserId,
+            actorUserId,
+            "GROUP_CREATED",
+            "{}",
+            now,
+            cancellationToken);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "GROUP_CREATED",
+            groupId,
+            "{}",
+            now,
+            cancellationToken);
+
         transaction.Commit();
 
         return await GetGroupDetailsAsync(
