@@ -287,6 +287,24 @@ public sealed class InterLanApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<RecentMessagePageResponse> GetDirectRecentHistoryPageAsync(
+        Guid conversationId,
+        Guid? beforeMessageId = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        var path = $"/api/v1/direct/{conversationId:D}/messages/recent?limit={limit}";
+        if (beforeMessageId is { } cursor)
+            path += $"&beforeMessageId={cursor:D}";
+
+        return await _httpClient.GetFromJsonAsync<RecentMessagePageResponse>(
+            path,
+            cancellationToken)
+            ?? throw new InvalidDataException("Recent message page response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
