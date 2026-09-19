@@ -1,4 +1,3 @@
-using System.Reflection;
 using Microsoft.Data.Sqlite;
 
 namespace InterLan.Infrastructure;
@@ -59,7 +58,9 @@ public sealed class SqliteDatabase
 
         foreach (var resource in resources)
         {
-            var migrationId = resource[(resource.LastIndexOf(".Migrations.", StringComparison.Ordinal) + ".Migrations.".Length)..^4];
+            var marker = ".Migrations.";
+            var markerIndex = resource.LastIndexOf(marker, StringComparison.Ordinal);
+            var migrationId = resource[(markerIndex + marker.Length)..^4];
 
             await using var exists = connection.CreateCommand();
             exists.CommandText = "SELECT COUNT(1) FROM schema_migrations WHERE migration_id = $id;";
@@ -75,7 +76,8 @@ public sealed class SqliteDatabase
             using var reader = new StreamReader(stream);
             var sql = await reader.ReadToEndAsync(cancellationToken);
 
-            await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+            using var transaction = connection.BeginTransaction();
+
             await using var migration = connection.CreateCommand();
             migration.Transaction = transaction;
             migration.CommandText = sql;
@@ -89,7 +91,7 @@ public sealed class SqliteDatabase
             record.Parameters.AddWithValue("$utc", DateTimeOffset.UtcNow.ToString("O"));
             await record.ExecuteNonQueryAsync(cancellationToken);
 
-            await transaction.CommitAsync(cancellationToken);
+            transaction.Commit();
         }
     }
 }
