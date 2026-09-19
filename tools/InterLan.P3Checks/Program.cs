@@ -860,7 +860,7 @@ try
         await using var audit = auditConnection.CreateCommand();
         audit.CommandText =
             """
-            SELECT event_type
+            SELECT event_type, payload_json
             FROM audit_events
             WHERE subject_type = 'GROUP'
               AND subject_id = $groupId
@@ -868,18 +868,40 @@ try
             """;
         audit.Parameters.AddWithValue("$groupId", created.GroupId.ToString("D"));
 
-        var auditTypes = new List<string>();
+        var auditRows = new List<(string EventType, string PayloadJson)>();
         await using var auditReader = await audit.ExecuteReaderAsync();
         while (await auditReader.ReadAsync())
-            auditTypes.Add(auditReader.GetString(0));
+        {
+            auditRows.Add((
+                auditReader.GetString(0),
+                auditReader.GetString(1)));
+        }
 
         Check(
-            auditTypes.Contains("GROUP_CREATED") &&
-            auditTypes.Contains("GROUP_METADATA_UPDATED") &&
-            auditTypes.Contains("GROUP_MEMBER_ADDED") &&
-            auditTypes.Contains("GROUP_MEMBER_REMOVED") &&
-            auditTypes.Contains("GROUP_MEMBER_ROLE_CHANGED"),
+            auditRows.Any(row => row.EventType == "GROUP_CREATED") &&
+            auditRows.Any(row => row.EventType == "GROUP_METADATA_UPDATED") &&
+            auditRows.Any(row => row.EventType == "GROUP_MEMBER_ADDED") &&
+            auditRows.Any(row => row.EventType == "GROUP_MEMBER_REMOVED") &&
+            auditRows.Any(row => row.EventType == "GROUP_MEMBER_ROLE_CHANGED"),
             "group authority mutations persist in audit ledger");
+
+        Check(
+            auditRows.Any(row =>
+                row.EventType == "GROUP_MEMBER_ADDED" &&
+                row.PayloadJson.Contains(
+                    adminId.ToString("D"),
+                    StringComparison.OrdinalIgnoreCase)) &&
+            auditRows.Any(row =>
+                row.EventType == "GROUP_MEMBER_REMOVED" &&
+                row.PayloadJson.Contains(
+                    memberId.ToString("D"),
+                    StringComparison.OrdinalIgnoreCase)) &&
+            auditRows.Any(row =>
+                row.EventType == "GROUP_MEMBER_ROLE_CHANGED" &&
+                row.PayloadJson.Contains(
+                    memberId.ToString("D"),
+                    StringComparison.OrdinalIgnoreCase)),
+            "group membership audit payloads identify their target user");
     }
 
     var restartedDatabase = new SqliteDatabase(databasePath);
