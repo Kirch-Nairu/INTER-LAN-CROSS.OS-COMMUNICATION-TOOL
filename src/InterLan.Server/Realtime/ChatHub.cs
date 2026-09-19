@@ -7,7 +7,8 @@ namespace InterLan.Server.Realtime;
 
 public sealed class ChatHub(
     EnrollmentStore enrollment,
-    RealtimeConnectionRegistry connections) : Hub
+    RealtimeConnectionRegistry connections,
+    RealtimeTicketStore tickets) : Hub
 {
     private const string LeaseKey = "interlan-realtime-lease";
 
@@ -15,16 +16,8 @@ public sealed class ChatHub(
 
     public override async Task OnConnectedAsync()
     {
-        var http = Context.GetHttpContext();
-        var token = ExtractBearerToken(http);
+        var principal = await ResolvePrincipalAsync(Context.GetHttpContext());
 
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            Context.Abort();
-            return;
-        }
-
-        var principal = await enrollment.ValidateSessionAsync(token, Context.ConnectionAborted);
         if (principal is null)
         {
             Context.Abort();
@@ -55,7 +48,7 @@ public sealed class ChatHub(
     public ControlPong Ping() =>
         new(ApiContractVersion.Current, DateTimeOffset.UtcNow, "ok");
 
-    private static string? ExtractBearerToken(HttpContext? context)
+    private async Task<SessionPrincipal?> ResolvePrincipalAsync(HttpContext? context)
     {
         if (context is null)
             return null;
@@ -63,14 +56,22 @@ public sealed class ChatHub(
         var authorization = context.Request.Headers.Authorization.ToString();
         if (authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
-            var headerToken = authorization["Bearer ".Length..].Trim();
-            if (!string.IsNullOrWhiteSpace(headerToken))
-                return headerToken;
+            var bearerToken = authorization["Bearer ".Length..].Trim();
+            if (!string.IsNullOrWhiteSpace(bearerToken))
+            {
+                return await enrollment.ValidateSessionAsync(
+                    bearerToken,
+                    Context.ConnectionAborted);
+            }
         }
 
-        // Browser WebSocket transports may be forced to use the standard SignalR
-        // access_token query parameter. Native clients should prefer Authorization.
-        var queryToken = context.Request.Query["access_token"].ToString();
-        return string.IsNullOrWhiteSpace(queryToken) ? null : queryToken;
+        var realtimeTicket = context.Request.Query["ticket"].ToString();
+        var ticketPrincipal = tickets.Consume(realtimeTicket);
+        if (ticketPrincipal is null)
+            return null;
+
+        return await enrollment.ValidateSessionByIdAsync(
+            ticketPrincipal.SessionId,
+            Context.ConnectionAborted);
     }
 }
