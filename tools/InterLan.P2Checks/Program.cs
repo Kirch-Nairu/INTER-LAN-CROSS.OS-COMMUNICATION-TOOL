@@ -278,6 +278,18 @@ try
                 IsArchived: false))),
         "non-member cannot mutate another direct conversation preference");
 
+    var pastMutePreference = await chat.UpdateDirectConversationPreferenceAsync(
+        alice,
+        ab1.ConversationId,
+        new UpdateDirectConversationPreferenceRequest(
+            IsPinned: false,
+            MutedUntilUtc: DateTimeOffset.UtcNow.AddMinutes(-5),
+            IsArchived: false));
+
+    Check(
+        pastMutePreference.MutedUntilUtc is null,
+        "expired mute request normalizes to unmuted state");
+
     var aliceAfterBobPreference =
         await chat.GetDirectConversationPreferenceAsync(
             alice,
