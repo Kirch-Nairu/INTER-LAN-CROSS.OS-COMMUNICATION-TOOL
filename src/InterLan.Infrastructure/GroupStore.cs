@@ -519,6 +519,114 @@ public sealed class GroupStore(SqliteDatabase database)
             now);
     }
 
+    public async Task<GroupMembershipMutationResponse> UpdateMemberRoleAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid targetUserId,
+        UpdateGroupMemberRoleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (targetUserId == Guid.Empty)
+            throw new ArgumentException("Group member user ID is required.", nameof(targetUserId));
+
+        var requestedRole = NormalizeAssignableGroupRole(request.Role);
+
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        var actorRole = await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        if (actorRole != "OWNER")
+            throw new UnauthorizedAccessException(
+                "Only the group owner can promote or demote members.");
+
+        var target = await GetGroupMemberStateAsync(
+            connection,
+            groupId,
+            targetUserId,
+            cancellationToken,
+            transaction);
+
+        if (target is null || target.Value.RemovedUtc is not null)
+            throw new KeyNotFoundException("Active group member was not found.");
+
+        if (target.Value.Role == "OWNER")
+            throw new UnauthorizedAccessException(
+                "The group owner role cannot be changed.");
+
+        if (target.Value.Role == requestedRole)
+        {
+            transaction.Commit();
+            return new GroupMembershipMutationResponse(
+                groupId,
+                targetUserId,
+                requestedRole,
+                "UNCHANGED",
+                DateTimeOffset.UtcNow);
+        }
+
+        var previousRole = target.Value.Role;
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText =
+                """
+                UPDATE group_members
+                SET group_role = $role
+                WHERE group_id = $groupId
+                  AND user_id = $userId
+                  AND removed_utc IS NULL
+                  AND group_role <> 'OWNER';
+                """;
+            update.Parameters.AddWithValue("$role", requestedRole);
+            update.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+            update.Parameters.AddWithValue("$userId", targetUserId.ToString("D"));
+
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("Group role mutation lost its authority race.");
+        }
+
+        var payload =
+            $"{{\"previousRole\":\"{previousRole}\",\"role\":\"{requestedRole}\"}}";
+
+        await AppendGroupEventAsync(
+            connection,
+            transaction,
+            groupId,
+            actorUserId,
+            targetUserId,
+            "MEMBER_ROLE_CHANGED",
+            payload,
+            now,
+            cancellationToken);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "GROUP_MEMBER_ROLE_CHANGED",
+            groupId,
+            payload,
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+
+        return new GroupMembershipMutationResponse(
+            groupId,
+            targetUserId,
+            requestedRole,
+            "ROLE_CHANGED",
+            now);
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
