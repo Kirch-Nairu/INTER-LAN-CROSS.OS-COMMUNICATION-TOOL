@@ -148,6 +148,7 @@ public sealed class EnrollmentStore(SqliteDatabase database)
 
         await using var connection = database.OpenConnection();
         await RequireOwnerAsync(connection, ownerUserId, cancellationToken);
+        using var transaction = connection.BeginTransaction();
 
         var inviteId = Guid.NewGuid();
         var token = SecretCodec.NewToken();
@@ -155,6 +156,7 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         var expires = now.Add(lifetime);
 
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             INSERT INTO invite_tokens (
@@ -168,6 +170,18 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         command.Parameters.AddWithValue("$created", now.ToString("O"));
         await command.ExecuteNonQueryAsync(cancellationToken);
 
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            ownerUserId,
+            "INVITE_CREATED",
+            "INVITE",
+            inviteId,
+            "{}",
+            now,
+            cancellationToken);
+
+        transaction.Commit();
         return new InviteResponse(inviteId, token, expires);
     }
 
