@@ -339,6 +339,56 @@ public sealed class ChatStore(SqliteDatabase database)
             DateTimeOffset.Parse(reader.GetString(3)));
     }
 
+    public async Task<DirectConversationPreferenceResponse> UpdateDirectConversationPreferenceAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        UpdateDirectConversationPreferenceRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var mutedUntil = request.MutedUntilUtc is { } requestedMute && requestedMute > now
+            ? requestedMute
+            : null;
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            INSERT INTO direct_conversation_preferences (
+                conversation_id, user_id, pinned_utc,
+                muted_until_utc, archived_utc, updated_utc
+            ) VALUES (
+                $conversationId, $userId, $pinnedUtc,
+                $mutedUntilUtc, $archivedUtc, $updatedUtc
+            )
+            ON CONFLICT(conversation_id, user_id) DO UPDATE SET
+                pinned_utc = excluded.pinned_utc,
+                muted_until_utc = excluded.muted_until_utc,
+                archived_utc = excluded.archived_utc,
+                updated_utc = excluded.updated_utc;
+            """;
+        command.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+        command.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+        command.Parameters.AddWithValue("$pinnedUtc", request.IsPinned ? now.ToString("O") : DBNull.Value);
+        command.Parameters.AddWithValue("$mutedUntilUtc", mutedUntil is null ? DBNull.Value : mutedUntil.Value.ToString("O"));
+        command.Parameters.AddWithValue("$archivedUtc", request.IsArchived ? now.ToString("O") : DBNull.Value);
+        command.Parameters.AddWithValue("$updatedUtc", now.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return new DirectConversationPreferenceResponse(
+            conversationId,
+            request.IsPinned,
+            mutedUntil,
+            request.IsArchived,
+            now);
+    }
+
     public async Task<PersistedMessageResult> SendDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
