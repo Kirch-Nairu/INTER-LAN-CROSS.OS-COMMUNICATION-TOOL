@@ -16,7 +16,7 @@ No fake commits. No whitespace farming. No empty commits.
 
 | Phase | Target | Observed baseline | Status |
 | --- | ---: | ---: | --- |
-| P3 | 300+ meaningful | 81 commits ahead of accepted main at code anchor `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220` | ACTIVE |
+| P3 | 300+ meaningful | 91 commits ahead of accepted main at code anchor `ea5729ada72064d3770cb4da64d56c539227eda8` | ACTIVE |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
 | P6 | 300+ | 0 | not started |
@@ -69,5 +69,14 @@ Source anchors:
 - `67e02424d2b9b716e91aa61a86214f3c2c841fbc` — remove post-commit actor reauthorization in realtime fan-out
 - `72448b65559364aa70caf3d65b453751dfd46795` — post-mutation projection tests
 - `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220` — receipt-vs-removal race proof source
+- `dd0c5a5dbc83b232336e7cb73d9f0eca45b7fa6a` — keep active-user and group response authority snapshots inside write transactions
+- `b5ef57eb260f9fc34892ff4361afb98722289e3e` — remove-vs-metadata authority regression
+- `688a7ddf0be54846673feec5305bf298a603416b` — correct metadata-race request construction
+- `d6665dfcf229c8a4406661b7847e48e68756b5d6` — explicit SQLite read-transaction helper
+- `7c8e49545b43f5de609df22974ff738c189b13ca` — group directory/history authorization snapshots
+- `f6272d50a8b4a4d353895d67615c36b1c79d132c` — authorized projection/message/receipt/event read snapshots
+- `28b5c21a4a2668309d292cf01dd7f69af8df3b78` — close read cursors before snapshot commit
+- `6b4947a64109f5471c51618a92939bef49483bfd` — revocation-raced read snapshot regression
+- `ea5729ada72064d3770cb4da64d56c539227eda8` — derive restart history expectation from valid race outcome
 
 Evidence: SOURCE INSPECTED ONLY. Executable gates NOT RUN in this environment.

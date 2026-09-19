@@ -24,10 +24,10 @@ Governance correction is forward-only; exact current HEAD must be read from Git.
 
 ## Current code anchor
 
-`4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220`
+`ea5729ada72064d3770cb4da64d56c539227eda8`
 
 Observed against `main@d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`:
-- ahead: 81 commits
+- ahead: 91 commits
 - behind: 0
 
 ## What changed before this handoff
@@ -47,8 +47,13 @@ P3 source already includes:
 - receipt authorization and writes moved into one write transaction;
 - post-commit realtime target projection no longer re-authorizes an actor after a mutation already committed;
 - concurrency checks now cover add/restore, remove-vs-send, remove-vs-role, and remove-vs-receipt races.
+- group create/add active-user checks now occur inside the serialized write transaction.
+- create/update group responses are materialized inside the authority transaction so a concurrent removal cannot turn an already-committed mutation into a post-commit authorization failure.
+- authorized group directory/detail/history/message/receipt/event/typing-target reads now use one SQLite read snapshot, preventing a user removed between authorization and later SELECTs from observing post-removal data.
+- concurrency coverage now includes remove-vs-metadata response linearization and revocation-raced reads that must never observe messages committed after removal.
+- restart history expectations now derive from the valid remove-vs-send race outcome rather than assuming one serialization order.
 
-A mistaken governance wave then copied Forge-style `.forge/` state into the product repo while referencing the wrong repository. That structure is being removed and replaced with the actual Operation-FORGE.kirion rapid-product instruction layer.
+A mistaken governance wave copied Forge-style `.forge/` state into the product repo while referencing the wrong repository. That structure was removed forward-only and replaced with the actual Operation-FORGE.kirion rapid-product instruction layer.
 
 ## What was intentionally not changed
 
@@ -71,8 +76,9 @@ A mistaken governance wave then copied Forge-style `.forge/` state into the prod
 
 ## Known risks
 
-- authority-race hardening is implemented in source but not executable-verified here;
-- remove-vs-role and remove-vs-send races must fail closed;
+- authority-race and revocation-read hardening are implemented in source but not executable-verified here;
+- remove-vs-role, remove-vs-send, remove-vs-metadata, and remove-vs-receipt races must fail closed under valid serialized outcomes;
+- authorized reads that began before revocation may complete only from their pre-revocation snapshot and must not observe later writes;
 - all group realtime paths must target current membership;
 - migration upgrade behavior must remain data-preserving;
 - validation claims must not be inherited from conversation memory.

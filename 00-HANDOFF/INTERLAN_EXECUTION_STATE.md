@@ -81,10 +81,10 @@ Implemented source surfaces include:
 
 ## Latest P3 authority-race wave
 
-Code anchor: `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220`
+Code anchor: `ea5729ada72064d3770cb4da64d56c539227eda8`
 
 Observed branch relationship at that anchor:
-- ahead of main: 81 commits
+- ahead of main: 91 commits
 - behind main: 0
 
 Implemented in source:
@@ -92,7 +92,12 @@ Implemented in source:
 - receipt membership authorization + write in the same transaction;
 - server-internal delivery target projection for post-commit fan-out;
 - removal of post-commit actor reauthorization from group send/edit/delete/receipt realtime fan-out;
-- add/restore/remove/send/role/receipt concurrency regression coverage.
+- add/restore/remove/send/role/receipt concurrency regression coverage;
+- active-user validation for group creation/member addition inside the serialized write transaction;
+- group create/update response snapshots inside the mutation transaction, removing post-commit actor reauthorization;
+- authorized group read snapshots across directory/details/history/messages/receipts/events/typing target projection;
+- remove-vs-metadata and revocation-raced read regression coverage;
+- restart persistence count derived from the actual valid remove-vs-send serialization outcome.
 
 Static brace/call-pattern inspection of touched P3 files: SOURCE INSPECTED ONLY.
 

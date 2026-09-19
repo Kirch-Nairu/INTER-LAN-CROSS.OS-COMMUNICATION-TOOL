@@ -36,13 +36,20 @@ Attack:
 - remove vs send;
 - duplicate group send;
 - concurrent receipt upserts;
-- history reads during writes.
+- history reads during writes;
+- admin metadata mutation vs removal;
+- revocation-raced authorized reads vs messages/events/receipts committed later.
 
-Source mitigation at `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220`:
+Source mitigation through `ea5729ada72064d3770cb4da64d56c539227eda8`:
 - group mutations acquire non-deferred SQLite write transactions before authority reads;
 - receipt writes share the same authority transaction;
 - post-commit realtime delivery targets do not re-authorize the already-committed actor;
-- concurrency checks cover add/restore, remove-vs-send, remove-vs-role, and remove-vs-receipt.
+- concurrency checks cover add/restore, remove-vs-send, remove-vs-role, and remove-vs-receipt;
+- create/add active-user checks occur inside serialized writes;
+- create/update responses are materialized before commit, so an authority change cannot cause a false post-commit failure;
+- authorized directory/detail/history/message/receipt/event/typing-target reads use one read snapshot across authorization and projection;
+- concurrency regressions cover remove-vs-metadata and revocation-raced reads, including exclusion of post-removal sentinel messages;
+- restart history verification accepts either valid remove-vs-send serialization outcome without weakening persistence checks.
 
 Required remaining evidence:
 - executable P3 concurrency run;
