@@ -50,3 +50,7 @@ public sealed record MessagePageResponse(
     IReadOnlyList<MessageResponse> Items,
     Guid? NextAfterMessageId,
     bool HasMore);
+
+public sealed record RealtimeTicketResponse(
+    string Ticket,
+    DateTimeOffset ExpiresUtc);
