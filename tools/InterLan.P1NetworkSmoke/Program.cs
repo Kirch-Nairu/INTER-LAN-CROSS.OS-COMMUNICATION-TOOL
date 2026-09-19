@@ -36,6 +36,7 @@ var startInfo = new ProcessStartInfo
 startInfo.ArgumentList.Add(serverDll);
 startInfo.Environment["INTERLAN_DATA_DIR"] = root;
 startInfo.Environment["InterLan__Server__Port"] = port.ToString();
+startInfo.Environment["InterLan__Server__BindAddress"] = "127.0.0.1";
 startInfo.Environment["InterLan__Server__DiscoveryEnabled"] = "false";
 startInfo.Environment["ASPNETCORE_CONTENTROOT"] = Path.Combine(repositoryRoot, "src", "InterLan.Server");
 

@@ -20,12 +20,16 @@ if (string.IsNullOrWhiteSpace(dataDirectory))
 
 var certificate = ServerCertificateManager.LoadOrCreate(dataDirectory);
 var port = builder.Configuration.GetValue("InterLan:Server:Port", 7443);
+var bindAddressText = builder.Configuration.GetValue<string>("InterLan:Server:BindAddress") ?? "0.0.0.0";
+
+if (!IPAddress.TryParse(bindAddressText, out var bindAddress))
+{
+    throw new InvalidOperationException($"InterLan:Server:BindAddress must be an IP address. Received: {bindAddressText}");
+}
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    // V1 LAN discovery is IPv4 multicast, so bind HTTPS explicitly on IPv4.
-    // This avoids Windows dual-stack ambiguity observed with ListenAnyIP/[::].
-    options.Listen(IPAddress.Any, port, listen => listen.UseHttps(certificate.Certificate));
+    options.Listen(bindAddress, port, listen => listen.UseHttps(certificate.Certificate));
 });
 
 var database = new SqliteDatabase(Path.Combine(dataDirectory, "interlan.db"));
