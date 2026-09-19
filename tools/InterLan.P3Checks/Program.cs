@@ -447,7 +447,7 @@ try
     var page = await groups.GetGroupHistoryPageAsync(
         adminId,
         created.GroupId,
-        afterMessageId: null,
+        afterMessageId: normalizedGroupMessage.Message.MessageId,
         limit: 1);
 
     Check(
