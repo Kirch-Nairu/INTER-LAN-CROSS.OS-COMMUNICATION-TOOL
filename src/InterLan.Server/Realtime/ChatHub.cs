@@ -55,10 +55,28 @@ public sealed class ChatHub(
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        var principal = Context.Items.TryGetValue("principal", out var principalValue)
+            ? principalValue as SessionPrincipal
+            : null;
+
         if (Context.Items.TryGetValue(LeaseKey, out var value) && value is IDisposable lease)
         {
             lease.Dispose();
             Context.Items.Remove(LeaseKey);
+        }
+
+        if (principal is not null)
+        {
+            await Clients.GroupExcept(
+                    AuthenticatedGroup,
+                    new[] { Context.ConnectionId })
+                .SendAsync(
+                    "PresenceChanged",
+                    new UserPresenceResponse(
+                        principal.UserId,
+                        connections.IsUserOnline(principal.UserId),
+                        connections.GetUserConnectionCount(principal.UserId),
+                        DateTimeOffset.UtcNow));
         }
 
         await base.OnDisconnectedAsync(exception);
