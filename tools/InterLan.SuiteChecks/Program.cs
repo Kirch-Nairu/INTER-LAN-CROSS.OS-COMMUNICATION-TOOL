@@ -10,6 +10,7 @@ var checks = new[]
     ("P1 NETWORK", "tools/InterLan.P1NetworkSmoke/InterLan.P1NetworkSmoke.csproj"),
     ("P2 CORE", "tools/InterLan.P2Checks/InterLan.P2Checks.csproj"),
     ("P2 REALTIME", "tools/InterLan.P2RealtimeSmoke/InterLan.P2RealtimeSmoke.csproj"),
+    ("P2 CONCURRENCY", "tools/InterLan.P2ConcurrencyChecks/InterLan.P2ConcurrencyChecks.csproj"),
     ("MIGRATIONS", "tools/InterLan.MigrationChecks/InterLan.MigrationChecks.csproj"),
     ("DESKTOP OWNER HOST", "tools/InterLan.DesktopChecks/InterLan.DesktopChecks.csproj")
 };
