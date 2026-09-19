@@ -376,6 +376,49 @@ public sealed class GroupStore(SqliteDatabase database)
         return events;
     }
 
+    private static string NormalizeAssignableGroupRole(string role)
+    {
+        if (string.IsNullOrWhiteSpace(role))
+            throw new ArgumentException("Group role is required.", nameof(role));
+
+        var normalized = role.Trim().ToUpperInvariant();
+        return normalized is "ADMIN" or "MEMBER"
+            ? normalized
+            : throw new ArgumentException(
+                "Assignable group role must be ADMIN or MEMBER.",
+                nameof(role));
+    }
+
+    private static async Task<(string Role, DateTimeOffset? RemovedUtc)?> GetGroupMemberStateAsync(
+        SqliteConnection connection,
+        Guid groupId,
+        Guid userId,
+        CancellationToken cancellationToken,
+        SqliteTransaction? transaction = null)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT group_role, removed_utc
+            FROM group_members
+            WHERE group_id = $groupId
+              AND user_id = $userId;
+            """;
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+        command.Parameters.AddWithValue("$userId", userId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return (
+            reader.GetString(0),
+            reader.IsDBNull(1)
+                ? null
+                : DateTimeOffset.Parse(reader.GetString(1)));
+    }
+
     private static async Task AppendGroupEventAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
