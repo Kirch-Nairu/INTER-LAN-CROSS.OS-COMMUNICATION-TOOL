@@ -136,3 +136,14 @@ public sealed record DirectGlobalMessageSearchHitResponse(
 public sealed record DirectGlobalMessageSearchResponse(
     string Query,
     IReadOnlyList<DirectGlobalMessageSearchHitResponse> Hits);
+
+public sealed record CreateGroupRequest(
+    string Name,
+    string? Topic = null);
+
+public sealed record GroupSummaryResponse(
+    Guid GroupId,
+    string Name,
+    string? Topic,
+    string MyRole,
+    DateTimeOffset CreatedUtc);
