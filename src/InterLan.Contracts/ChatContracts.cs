@@ -147,3 +147,19 @@ public sealed record GroupSummaryResponse(
     string? Topic,
     string MyRole,
     DateTimeOffset CreatedUtc);
+
+public sealed record GroupMemberResponse(
+    Guid UserId,
+    string Username,
+    string DisplayName,
+    string Role,
+    DateTimeOffset JoinedUtc);
+
+public sealed record GroupDetailsResponse(
+    Guid GroupId,
+    string Name,
+    string? Topic,
+    Guid CreatedByUserId,
+    DateTimeOffset CreatedUtc,
+    string MyRole,
+    IReadOnlyList<GroupMemberResponse> Members);
