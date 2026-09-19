@@ -34,6 +34,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InterLan.SuiteChecks", "too
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InterLan.P2ConcurrencyChecks", "tools\InterLan.P2ConcurrencyChecks\InterLan.P2ConcurrencyChecks.csproj", "{12121212-1212-4121-8121-121212121212}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InterLan.P3Checks", "tools\InterLan.P3Checks\InterLan.P3Checks.csproj", "{13131313-1313-4131-8131-131313131313}"
+EndProject
 Global
   GlobalSection(SolutionConfigurationPlatforms) = preSolution
     Debug|Any CPU = Debug|Any CPU
@@ -104,5 +106,9 @@ Global
     {12121212-1212-4121-8121-121212121212}.Debug|Any CPU.Build.0 = Debug|Any CPU
     {12121212-1212-4121-8121-121212121212}.Release|Any CPU.ActiveCfg = Release|Any CPU
     {12121212-1212-4121-8121-121212121212}.Release|Any CPU.Build.0 = Release|Any CPU
+    {13131313-1313-4131-8131-131313131313}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {13131313-1313-4131-8131-131313131313}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {13131313-1313-4131-8131-131313131313}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {13131313-1313-4131-8131-131313131313}.Release|Any CPU.Build.0 = Release|Any CPU
   EndGlobalSection
 EndGlobal
