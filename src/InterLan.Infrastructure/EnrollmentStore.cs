@@ -1022,6 +1022,41 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         transaction.Commit();
     }
 
+    public async Task<CurrentDeviceSecurityResponse> GetCurrentDeviceSecurityAsync(
+        Guid actorUserId,
+        Guid deviceId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT device_id, device_name, platform, approved_utc,
+                   last_seen_utc, credential_created_utc,
+                   credential_rotated_utc, credential_last_used_utc
+            FROM devices
+            WHERE device_id = $deviceId
+              AND user_id = $userId
+              AND revoked_utc IS NULL;
+            """;
+        command.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+        command.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            throw new UnauthorizedAccessException("Current active device was not found.");
+
+        return new CurrentDeviceSecurityResponse(
+            Guid.Parse(reader.GetString(0)),
+            reader.GetString(1),
+            reader.GetString(2),
+            DateTimeOffset.Parse(reader.GetString(3)),
+            reader.IsDBNull(4) ? null : DateTimeOffset.Parse(reader.GetString(4)),
+            reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5)),
+            reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6)),
+            reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7)));
+    }
+
     public async Task<IReadOnlyList<SessionSummaryResponse>> ListOwnSessionsAsync(
         Guid actorUserId,
         Guid currentSessionId,
