@@ -37,6 +37,7 @@ startInfo.ArgumentList.Add(serverDll);
 startInfo.Environment["INTERLAN_DATA_DIR"] = root;
 startInfo.Environment["InterLan__Server__Port"] = port.ToString();
 startInfo.Environment["InterLan__Server__DiscoveryEnabled"] = "false";
+startInfo.Environment["ASPNETCORE_CONTENTROOT"] = Path.Combine(repositoryRoot, "src", "InterLan.Server");
 
 var output = new ConcurrentQueue<string>();
 var errors = new ConcurrentQueue<string>();
@@ -66,7 +67,7 @@ using var handler = new HttpClientHandler
 };
 using var client = new HttpClient(handler)
 {
-    BaseAddress = new Uri($"https://127.0.0.1:{port}"),
+    BaseAddress = new Uri($"https://localhost:{port}"),
     Timeout = TimeSpan.FromSeconds(1)
 };
 
