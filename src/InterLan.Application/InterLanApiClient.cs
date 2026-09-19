@@ -97,6 +97,18 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Message page response was empty.");
     }
 
+    public async Task<IReadOnlyList<MessageReceiptResponse>> GetMessageReceiptsAsync(
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<MessageReceiptResponse[]>(
+            $"/api/v1/messages/{messageId:D}/receipts",
+            cancellationToken)
+            ?? Array.Empty<MessageReceiptResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
