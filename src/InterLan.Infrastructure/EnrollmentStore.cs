@@ -939,6 +939,44 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         transaction.Commit();
     }
 
+    public async Task<IReadOnlyList<SessionSummaryResponse>> ListOwnSessionsAsync(
+        Guid actorUserId,
+        Guid currentSessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT session_id, device_id, created_utc, expires_utc,
+                   revoked_utc, last_seen_utc
+            FROM device_sessions
+            WHERE user_id = $userId
+            ORDER BY created_utc DESC, session_id DESC;
+            """;
+        command.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+
+        var sessions = new List<SessionSummaryResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var sessionId = Guid.Parse(reader.GetString(0));
+
+            sessions.Add(new SessionSummaryResponse(
+                sessionId,
+                reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1)),
+                DateTimeOffset.Parse(reader.GetString(2)),
+                DateTimeOffset.Parse(reader.GetString(3)),
+                reader.IsDBNull(4) ? null : DateTimeOffset.Parse(reader.GetString(4)),
+                reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5)),
+                sessionId == currentSessionId));
+        }
+
+        return sessions;
+    }
+
     public async Task RevokeOwnSessionAsync(
         Guid actorUserId,
         Guid sessionId,
