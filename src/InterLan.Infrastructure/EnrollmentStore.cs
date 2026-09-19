@@ -608,6 +608,114 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         return session;
     }
 
+    public async Task<SessionResponse> RotateDeviceCredentialAsync(
+        Guid actorUserId,
+        Guid actorSessionId,
+        Guid deviceId,
+        TimeSpan lifetime,
+        CancellationToken cancellationToken = default)
+    {
+        if (actorUserId == Guid.Empty || actorSessionId == Guid.Empty || deviceId == Guid.Empty)
+            throw new UnauthorizedAccessException("Active device session is required.");
+
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        var now = DateTimeOffset.UtcNow;
+
+        string role;
+        await using (var authority = connection.CreateCommand())
+        {
+            authority.Transaction = transaction;
+            authority.CommandText =
+                """
+                SELECT u.role
+                FROM devices d
+                JOIN users u ON u.user_id = d.user_id
+                JOIN device_sessions s
+                  ON s.device_id = d.device_id
+                 AND s.user_id = d.user_id
+                WHERE d.device_id = $deviceId
+                  AND d.user_id = $userId
+                  AND d.revoked_utc IS NULL
+                  AND u.disabled_utc IS NULL
+                  AND s.session_id = $sessionId
+                  AND s.revoked_utc IS NULL
+                  AND s.expires_utc > $now;
+                """;
+            authority.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            authority.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            authority.Parameters.AddWithValue("$sessionId", actorSessionId.ToString("D"));
+            authority.Parameters.AddWithValue("$now", now.ToString("O"));
+
+            var value = await authority.ExecuteScalarAsync(cancellationToken);
+            if (value is null)
+                throw new UnauthorizedAccessException("Active device session is required.");
+
+            role = Convert.ToString(value)!;
+        }
+
+        var deviceCredential = SecretCodec.NewToken();
+        await using (var rotate = connection.CreateCommand())
+        {
+            rotate.Transaction = transaction;
+            rotate.CommandText =
+                """
+                UPDATE devices
+                SET credential_hash = $credentialHash,
+                    credential_rotated_utc = $utc,
+                    credential_last_used_utc = $utc
+                WHERE device_id = $deviceId
+                  AND user_id = $userId
+                  AND revoked_utc IS NULL;
+                """;
+            rotate.Parameters.AddWithValue("$credentialHash", SecretCodec.HashToken(deviceCredential));
+            rotate.Parameters.AddWithValue("$utc", now.ToString("O"));
+            rotate.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            rotate.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+
+            if (await rotate.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new UnauthorizedAccessException("Active device is required.");
+        }
+
+        await using (var revokeSessions = connection.CreateCommand())
+        {
+            revokeSessions.Transaction = transaction;
+            revokeSessions.CommandText =
+                """
+                UPDATE device_sessions
+                SET revoked_utc = $utc
+                WHERE device_id = $deviceId
+                  AND revoked_utc IS NULL;
+                """;
+            revokeSessions.Parameters.AddWithValue("$utc", now.ToString("O"));
+            revokeSessions.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            await revokeSessions.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var session = await CreateSessionAsync(
+            connection,
+            actorUserId,
+            deviceId,
+            role,
+            lifetime,
+            cancellationToken,
+            transaction);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "DEVICE_CREDENTIAL_ROTATED",
+            "DEVICE",
+            deviceId,
+            "{}",
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+        return session with { DeviceCredential = deviceCredential };
+    }
+
     public async Task<SessionPrincipal?> ValidateSessionAsync(
         string bearerToken,
         CancellationToken cancellationToken = default)
