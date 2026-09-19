@@ -1,4 +1,5 @@
 using InterLan.Contracts;
+using InterLan.Domain;
 using Microsoft.Data.Sqlite;
 
 namespace InterLan.Infrastructure;
@@ -242,12 +243,10 @@ public sealed class ChatStore(SqliteDatabase database)
     {
         if (request.ClientMessageId == Guid.Empty)
             throw new ArgumentException("ClientMessageId must be non-empty.");
-        if (string.IsNullOrWhiteSpace(request.Body))
-            throw new ArgumentException("Message body is required.");
-        if (request.Body.Length > MaxMessageLength)
-            throw new ArgumentException($"Message body cannot exceed {MaxMessageLength} characters.");
 
-        var body = request.Body.Trim();
+        var body = MessageTextPolicy.Normalize(
+            request.Body,
+            MaxMessageLength);
         await using var connection = database.OpenConnection();
         await RequireDirectMembershipAsync(connection, actorUserId, conversationId, cancellationToken);
 
