@@ -20,12 +20,14 @@ public sealed class GroupStore(SqliteDatabase database)
         var topic = GroupTextPolicy.NormalizeTopic(request.Topic);
 
         await using var connection = database.OpenConnection();
+        using var transaction = BeginWriteTransaction(connection);
+
         await RequireActiveUserAsync(
             connection,
             actorUserId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
-        using var transaction = BeginWriteTransaction(connection);
         var groupId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
@@ -88,12 +90,15 @@ public sealed class GroupStore(SqliteDatabase database)
             now,
             cancellationToken);
 
-        transaction.Commit();
-
-        return await GetGroupDetailsAsync(
+        var created = await GetGroupDetailsAsync(
+            connection,
+            transaction,
             actorUserId,
             groupId,
             cancellationToken);
+
+        transaction.Commit();
+        return created;
     }
 
     public async Task<IReadOnlyList<GroupSummaryResponse>> ListGroupsAsync(
@@ -141,11 +146,27 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        return await GetGroupDetailsAsync(
+            connection,
+            transaction: null,
+            actorUserId,
+            groupId,
+            cancellationToken);
+    }
+
+    private static async Task<GroupDetailsResponse> GetGroupDetailsAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        Guid actorUserId,
+        Guid groupId,
+        CancellationToken cancellationToken)
+    {
         var myRole = await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         string name;
         string? topic;
@@ -154,6 +175,7 @@ public sealed class GroupStore(SqliteDatabase database)
 
         await using (var group = connection.CreateCommand())
         {
+            group.Transaction = transaction;
             group.CommandText =
                 """
                 SELECT name, topic, created_by_user_id, created_utc
@@ -175,6 +197,7 @@ public sealed class GroupStore(SqliteDatabase database)
         var members = new List<GroupMemberResponse>();
         await using (var member = connection.CreateCommand())
         {
+            member.Transaction = transaction;
             member.CommandText =
                 """
                 SELECT u.user_id, u.username, u.display_name,
@@ -283,12 +306,15 @@ public sealed class GroupStore(SqliteDatabase database)
             now,
             cancellationToken);
 
-        transaction.Commit();
-
-        return await GetGroupDetailsAsync(
+        var updated = await GetGroupDetailsAsync(
+            connection,
+            transaction,
             actorUserId,
             groupId,
             cancellationToken);
+
+        transaction.Commit();
+        return updated;
     }
 
     public async Task<GroupMembershipMutationResponse> AddMemberAsync(
@@ -303,12 +329,13 @@ public sealed class GroupStore(SqliteDatabase database)
         var requestedRole = NormalizeAssignableGroupRole(request.Role);
 
         await using var connection = database.OpenConnection();
+        using var transaction = BeginWriteTransaction(connection);
+
         await RequireActiveUserAsync(
             connection,
             request.UserId,
-            cancellationToken);
-
-        using var transaction = BeginWriteTransaction(connection);
+            cancellationToken,
+            transaction);
 
         var actorRole = await RequireActiveGroupMemberAsync(
             connection,
@@ -1690,9 +1717,11 @@ public sealed class GroupStore(SqliteDatabase database)
     private static async Task RequireActiveUserAsync(
         SqliteConnection connection,
         Guid userId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SqliteTransaction? transaction = null)
     {
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             SELECT COUNT(1)
