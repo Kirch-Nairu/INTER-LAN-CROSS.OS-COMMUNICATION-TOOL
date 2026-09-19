@@ -60,6 +60,25 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? Array.Empty<DirectConversationSummaryResponse>();
     }
 
+    public async Task<MessageResponse> SendDirectMessageAsync(
+        Guid conversationId,
+        SendMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            $"/api/v1/direct/{conversationId:D}/messages",
+            request,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Message response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
