@@ -108,3 +108,6 @@ public sealed record SessionSummaryResponse(
     DateTimeOffset? RevokedUtc,
     DateTimeOffset? LastSeenUtc,
     bool Current);
+
+public sealed record RevokeOtherSessionsResponse(
+    int RevokedCount);
