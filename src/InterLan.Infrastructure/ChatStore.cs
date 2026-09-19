@@ -608,6 +608,115 @@ public sealed class ChatStore(SqliteDatabase database)
         return members;
     }
 
+    public async Task<ConversationReadResponse> MarkConversationReadAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        Guid? upToMessageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        string? cutoffCreated = null;
+        string? cutoffId = null;
+
+        if (upToMessageId is { } cursor)
+        {
+            await using var cutoff = connection.CreateCommand();
+            cutoff.CommandText =
+                """
+                SELECT created_utc, message_id
+                FROM messages
+                WHERE message_id = $messageId
+                  AND scope_type = 'DIRECT'
+                  AND scope_id = $conversationId;
+                """;
+            cutoff.Parameters.AddWithValue("$messageId", cursor.ToString("D"));
+            cutoff.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+
+            await using var reader = await cutoff.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+                throw new KeyNotFoundException("Read cursor was not found in this conversation.");
+
+            cutoffCreated = reader.GetString(0);
+            cutoffId = reader.GetString(1);
+        }
+
+        var messageIds = new List<Guid>();
+        await using (var candidates = connection.CreateCommand())
+        {
+            candidates.CommandText =
+                """
+                SELECT m.message_id
+                FROM messages m
+                WHERE m.scope_type = 'DIRECT'
+                  AND m.scope_id = $conversationId
+                  AND m.deleted_utc IS NULL
+                  AND m.sender_user_id <> $actor
+                  AND (
+                      $cutoffCreated IS NULL
+                      OR m.created_utc < $cutoffCreated
+                      OR (m.created_utc = $cutoffCreated AND m.message_id <= $cutoffId)
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM message_receipts r
+                      WHERE r.message_id = m.message_id
+                        AND r.user_id = $actor
+                        AND r.read_utc IS NOT NULL
+                  )
+                ORDER BY m.created_utc, m.message_id;
+                """;
+            candidates.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+            candidates.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+            candidates.Parameters.AddWithValue(
+                "$cutoffCreated",
+                cutoffCreated is null ? DBNull.Value : cutoffCreated);
+            candidates.Parameters.AddWithValue(
+                "$cutoffId",
+                cutoffId is null ? DBNull.Value : cutoffId);
+
+            await using var reader = await candidates.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                messageIds.Add(Guid.Parse(reader.GetString(0)));
+        }
+
+        var readUtc = DateTimeOffset.UtcNow;
+        using var transaction = connection.BeginTransaction();
+
+        foreach (var messageId in messageIds)
+        {
+            await using var receipt = connection.CreateCommand();
+            receipt.Transaction = transaction;
+            receipt.CommandText =
+                """
+                INSERT INTO message_receipts (
+                    message_id, user_id, delivered_utc, read_utc
+                ) VALUES (
+                    $messageId, $userId, $utc, $utc
+                )
+                ON CONFLICT(message_id, user_id) DO UPDATE SET
+                    delivered_utc = COALESCE(message_receipts.delivered_utc, excluded.delivered_utc),
+                    read_utc = COALESCE(message_receipts.read_utc, excluded.read_utc);
+                """;
+            receipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+            receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            receipt.Parameters.AddWithValue("$utc", readUtc.ToString("O"));
+            await receipt.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        transaction.Commit();
+
+        return new ConversationReadResponse(
+            conversationId,
+            messageIds.Count,
+            readUtc);
+    }
+
     public async Task MarkDeliveredAsync(
         Guid actorUserId,
         Guid messageId,
