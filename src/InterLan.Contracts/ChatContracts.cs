@@ -31,3 +31,10 @@ public sealed record MessageResponse(
 public sealed record PersistedMessageResult(
     MessageResponse Message,
     bool Created);
+
+
+public sealed record MessageReceiptResponse(
+    Guid MessageId,
+    Guid UserId,
+    DateTimeOffset? DeliveredUtc,
+    DateTimeOffset? ReadUtc);
