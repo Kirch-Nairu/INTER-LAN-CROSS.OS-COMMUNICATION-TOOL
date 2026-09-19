@@ -134,6 +134,14 @@ try
             new SendMessageRequest(Guid.NewGuid(), new string('x', ChatStore.MaxMessageLength + 1)))),
         "oversized message fails closed");
 
+    Check(await ThrowsAsync<InvalidOperationException>(() =>
+        chat.MarkDeliveredAsync(alice, first.Message.MessageId)),
+        "sender cannot acknowledge own message as delivered");
+
+    Check(await ThrowsAsync<InvalidOperationException>(() =>
+        chat.MarkReadAsync(alice, first.Message.MessageId)),
+        "sender cannot acknowledge own message as read");
+
     await chat.MarkDeliveredAsync(bob, first.Message.MessageId);
     await chat.MarkDeliveredAsync(bob, first.Message.MessageId);
 
