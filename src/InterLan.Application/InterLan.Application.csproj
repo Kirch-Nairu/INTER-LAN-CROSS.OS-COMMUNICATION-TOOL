@@ -3,4 +3,7 @@
     <ProjectReference Include="../InterLan.Contracts/InterLan.Contracts.csproj" />
     <ProjectReference Include="../InterLan.Domain/InterLan.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.12" />
+  </ItemGroup>
 </Project>
