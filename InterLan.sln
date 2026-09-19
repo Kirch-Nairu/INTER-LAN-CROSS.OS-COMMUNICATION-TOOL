@@ -38,6 +38,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InterLan.P3Checks", "tools\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InterLan.P3RealtimeSmoke", "tools\InterLan.P3RealtimeSmoke\InterLan.P3RealtimeSmoke.csproj", "{14141414-1414-4141-8141-141414141414}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InterLan.P3ConcurrencyChecks", "tools\InterLan.P3ConcurrencyChecks\InterLan.P3ConcurrencyChecks.csproj", "{15151515-1515-4151-8151-151515151515}"
+EndProject
 Global
   GlobalSection(SolutionConfigurationPlatforms) = preSolution
     Debug|Any CPU = Debug|Any CPU
@@ -116,5 +118,9 @@ Global
     {14141414-1414-4141-8141-141414141414}.Debug|Any CPU.Build.0 = Debug|Any CPU
     {14141414-1414-4141-8141-141414141414}.Release|Any CPU.ActiveCfg = Release|Any CPU
     {14141414-1414-4141-8141-141414141414}.Release|Any CPU.Build.0 = Release|Any CPU
+    {15151515-1515-4151-8151-151515151515}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {15151515-1515-4151-8151-151515151515}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {15151515-1515-4151-8151-151515151515}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {15151515-1515-4151-8151-151515151515}.Release|Any CPU.Build.0 = Release|Any CPU
   EndGlobalSection
 EndGlobal
