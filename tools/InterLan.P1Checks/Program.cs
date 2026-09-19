@@ -255,10 +255,15 @@ try
 
     var devicesAfterRestart = await pairingRestartStore.ListDevicesAsync(owner.OwnerUserId);
     Check(
-        devicesAfterRestart.Count == 1 &&
-        devicesAfterRestart[0].DeviceId == decision.DeviceId &&
-        devicesAfterRestart[0].RevokedUtc is null,
-        "approved device record survives server restart");
+        devicesAfterRestart.Count == 2 &&
+        devicesAfterRestart.Any(device =>
+            device.DeviceId == decision.DeviceId &&
+            device.RevokedUtc is null) &&
+        devicesAfterRestart.Any(device =>
+            device.DeviceId == secondDeviceDecision.DeviceId &&
+            device.UserId == decision.UserId &&
+            device.RevokedUtc is null),
+        "all approved device records survive server restart");
 
     await store.RevokeDeviceAsync(owner.OwnerUserId, decision.DeviceId!.Value);
     var revoked = await store.ValidateSessionAsync(memberSession.BearerToken);
