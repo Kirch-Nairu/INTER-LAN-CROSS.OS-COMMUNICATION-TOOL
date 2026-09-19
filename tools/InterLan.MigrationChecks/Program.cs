@@ -16,7 +16,8 @@ var historicalMigrations = new[]
     "003_p2_direct_messages",
     "004_p2_device_pairing_persistence",
     "005_p2_device_credential_lifecycle",
-    "006_p2_query_indexes"
+    "006_p2_query_indexes",
+    "007_p2_direct_preferences"
 };
 
 foreach (var historicalMigration in historicalMigrations)
@@ -67,7 +68,7 @@ foreach (var historicalMigration in historicalMigrations)
             history.CommandText = "SELECT COUNT(1) FROM schema_migrations;";
             var count = Convert.ToInt32(await history.ExecuteScalarAsync());
             Check(
-                count == 7,
+                count == 8,
                 $"{historicalMigration} upgrades through all current migrations");
         }
 
@@ -125,13 +126,31 @@ foreach (var historicalMigration in historicalMigrations)
                 $"{historicalMigration} upgrades direct conversation preference schema");
         }
 
+        await using (var groupEventsTable = connection.CreateCommand())
+        {
+            groupEventsTable.CommandText =
+                """
+                SELECT COUNT(1)
+                FROM sqlite_master
+                WHERE type = 'table'
+                  AND name = 'group_events';
+                """;
+
+            Check(
+                Convert.ToInt32(await groupEventsTable.ExecuteScalarAsync()) == 1,
+                $"{historicalMigration} upgrades durable group event schema");
+        }
+
         var requiredIndexes = new[]
         {
             "ix_direct_conversation_members_user",
             "ix_messages_scope_order",
             "ix_message_receipts_user_read",
             "ix_devices_user_revoked",
-            "ix_device_sessions_device_active"
+            "ix_device_sessions_device_active",
+            "ix_group_events_group_created",
+            "ix_group_members_user_active",
+            "ix_group_members_group_active"
         };
 
         foreach (var indexName in requiredIndexes)
@@ -157,7 +176,7 @@ foreach (var historicalMigration in historicalMigrations)
         await using var idempotentHistory = idempotentConnection.CreateCommand();
         idempotentHistory.CommandText = "SELECT COUNT(1) FROM schema_migrations;";
         Check(
-            Convert.ToInt32(await idempotentHistory.ExecuteScalarAsync()) == 7,
+            Convert.ToInt32(await idempotentHistory.ExecuteScalarAsync()) == 8,
             $"{historicalMigration} migration replay remains idempotent");
     }
     finally
