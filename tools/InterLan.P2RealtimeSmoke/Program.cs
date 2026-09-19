@@ -294,6 +294,31 @@ var baseUri = server.BaseUri;
 
     Console.WriteLine("PASS connected member appears in authenticated presence snapshot");
 
+    await using var ownerHub = CreateHub(baseUri, ownerToken);
+    var typingChanged = new TaskCompletionSource<JsonElement>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+
+    ownerHub.On<JsonElement>("TypingChanged", payload =>
+    {
+        if (payload.GetProperty("conversationId").GetGuid() == conversationId &&
+            payload.GetProperty("userId").GetGuid() == memberUserId)
+        {
+            typingChanged.TrySetResult(payload);
+        }
+    });
+
+    await ownerHub.StartAsync();
+    await memberHub.InvokeAsync("SetTyping", conversationId, true);
+
+    var typingPayload = await typingChanged.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    if (!typingPayload.GetProperty("isTyping").GetBoolean())
+    {
+        Console.Error.WriteLine("FAIL typing indicator payload did not report active typing");
+        return 1;
+    }
+
+    Console.WriteLine("PASS authorized typing indicator reaches direct peer in realtime");
+
     var clientMessageId = Guid.NewGuid();
     using var send = await ownerHttp.PostAsJsonAsync($"/api/v1/direct/{conversationId:D}/messages", new
     {
