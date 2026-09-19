@@ -425,6 +425,67 @@ public sealed class ChatStore(SqliteDatabase database)
         return edited;
     }
 
+    public async Task<MessageDeletedResponse> DeleteDirectMessageAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        using var transaction = connection.BeginTransaction();
+
+        var existing = await GetDirectMessageAsync(
+            connection,
+            transaction,
+            conversationId,
+            messageId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Message not found.");
+
+        if (existing.SenderUserId != actorUserId)
+            throw new UnauthorizedAccessException("Only the sender can delete this message.");
+
+        if (existing.DeletedUtc is { } alreadyDeleted)
+        {
+            transaction.Commit();
+            return new MessageDeletedResponse(
+                messageId,
+                conversationId,
+                alreadyDeleted);
+        }
+
+        var deletedUtc = DateTimeOffset.UtcNow;
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText =
+                """
+                UPDATE messages
+                SET deleted_utc = $deletedUtc
+                WHERE message_id = $messageId
+                  AND deleted_utc IS NULL;
+                """;
+            update.Parameters.AddWithValue("$deletedUtc", deletedUtc.ToString("O"));
+            update.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("Message delete could not be persisted.");
+        }
+
+        transaction.Commit();
+        return new MessageDeletedResponse(
+            messageId,
+            conversationId,
+            deletedUtc);
+    }
+
     public async Task<IReadOnlyList<MessageResponse>> GetDirectHistoryAsync(
         Guid actorUserId,
         Guid conversationId,
