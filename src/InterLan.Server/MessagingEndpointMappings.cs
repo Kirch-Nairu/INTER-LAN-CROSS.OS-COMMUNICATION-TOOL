@@ -10,6 +10,29 @@ public static class MessagingEndpointMappings
     public static IEndpointRouteBuilder MapInterLanMessagingEndpoints(
         this IEndpointRouteBuilder app)
     {
+        app.MapPost("/api/v1/realtime/ticket", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            RealtimeTicketStore tickets,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                return Results.Ok(tickets.Issue(
+                    principal,
+                    TimeSpan.FromSeconds(45)));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        }).RequireRateLimiting("auth");
+        
         app.MapGet("/api/v1/users", async (
             HttpContext context,
             EnrollmentStore enrollment,
