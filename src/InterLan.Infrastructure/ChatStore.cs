@@ -213,8 +213,17 @@ public sealed class ChatStore(SqliteDatabase database)
         return conversations;
     }
 
+    public Task<IReadOnlyList<DirectConversationSummaryResponse>> ListDirectConversationSummariesAsync(
+        Guid actorUserId,
+        CancellationToken cancellationToken = default) =>
+        ListDirectConversationSummariesAsync(
+            actorUserId,
+            includeArchived: true,
+            cancellationToken);
+
     public async Task<IReadOnlyList<DirectConversationSummaryResponse>> ListDirectConversationSummariesAsync(
         Guid actorUserId,
+        bool includeArchived,
         CancellationToken cancellationToken = default)
     {
         var conversations = await ListDirectConversationsAsync(actorUserId, cancellationToken);
