@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Net.Security;
 using System.Security.Cryptography;
@@ -54,6 +55,65 @@ public sealed class PairedClientSessionManager(
                 throw new InvalidDataException("Renewed session does not match the paired device.");
 
             return new PairedClientConnection(pairing, session, client);
+        }
+        catch
+        {
+            client.Dispose();
+            throw;
+        }
+    }
+
+    public async Task<PairedClientConnection> RotateCredentialAsync(
+        string pairingStatePath,
+        SessionResponse currentSession,
+        CancellationToken cancellationToken = default)
+    {
+        var pairing = await _pairingStore.LoadAsync(pairingStatePath, cancellationToken)
+            ?? throw new InvalidOperationException("This client is not paired.");
+
+        if (currentSession.DeviceId != pairing.DeviceId ||
+            string.IsNullOrWhiteSpace(currentSession.BearerToken))
+        {
+            throw new UnauthorizedAccessException("The active session does not belong to this paired device.");
+        }
+
+        var client = CreatePinnedHttpClient(pairing);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", currentSession.BearerToken);
+
+        try
+        {
+            using var response = await client.PostAsync(
+                $"/api/v1/devices/{pairing.DeviceId:D}/credential/rotate",
+                content: null,
+                cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+                throw new UnauthorizedAccessException("Device credential rotation was rejected.");
+
+            response.EnsureSuccessStatusCode();
+
+            var rotatedSession = await response.Content.ReadFromJsonAsync<SessionResponse>(
+                cancellationToken: cancellationToken)
+                ?? throw new InvalidDataException("Credential rotation returned no session.");
+
+            if (rotatedSession.DeviceId != pairing.DeviceId ||
+                string.IsNullOrWhiteSpace(rotatedSession.DeviceCredential))
+            {
+                throw new InvalidDataException("Credential rotation returned an invalid device identity.");
+            }
+
+            var rotatedPairing = pairing with
+            {
+                DeviceCredential = rotatedSession.DeviceCredential
+            };
+
+            await _pairingStore.SaveAsync(
+                pairingStatePath,
+                rotatedPairing,
+                cancellationToken);
+
+            return new PairedClientConnection(rotatedPairing, rotatedSession, client);
         }
         catch
         {
