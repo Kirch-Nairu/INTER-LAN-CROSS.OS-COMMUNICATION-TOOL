@@ -235,7 +235,36 @@ try
 
     Console.WriteLine("PASS encrypted client pairing state restores and renews session without re-enrollment");
 
-    memberToken = renewedToken;
+    var pairingSessionManager = new PairedClientSessionManager();
+    using var rotatedConnection = await pairingSessionManager.RotateCredentialAsync(
+        pairingStatePath,
+        pairedConnection.Session);
+
+    if (string.IsNullOrWhiteSpace(rotatedConnection.Session.DeviceCredential) ||
+        rotatedConnection.Session.DeviceCredential == deviceCredential)
+    {
+        Console.Error.WriteLine("FAIL paired-device credential rotation did not replace credential");
+        return 1;
+    }
+
+    using var oldCredentialRenewal = await ownerHttp.PostAsJsonAsync(
+        "/api/v1/auth/device/renew",
+        new
+        {
+            deviceId = memberDeviceId,
+            deviceCredential
+        });
+
+    if (oldCredentialRenewal.StatusCode != HttpStatusCode.Unauthorized)
+    {
+        Console.Error.WriteLine($"FAIL old device credential remained valid after rotation: {(int)oldCredentialRenewal.StatusCode}");
+        return 1;
+    }
+
+    Console.WriteLine("PASS paired-device rotation invalidates previous durable credential");
+
+    deviceCredential = rotatedConnection.Session.DeviceCredential!;
+    memberToken = rotatedConnection.Session.BearerToken;
     Bearer(memberHttp, memberToken);
 
     var dmResponse = await ownerHttp.PostAsJsonAsync("/api/v1/direct", new { otherUserId = memberUserId });
