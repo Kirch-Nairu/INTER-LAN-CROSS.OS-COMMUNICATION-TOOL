@@ -139,6 +139,33 @@ public static class MessagingEndpointMappings
             }
         });
         
+        app.MapPut("/api/v1/direct/{conversationId:guid}/preference", async (
+            Guid conversationId,
+            UpdateDirectConversationPreferenceRequest request,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            ChatStore chat,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                return Results.Ok(await chat.UpdateDirectConversationPreferenceAsync(
+                    principal.UserId,
+                    conversationId,
+                    request,
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+
         app.MapPost("/api/v1/direct", async (
             HttpContext context,
             OpenDirectConversationRequest request,
