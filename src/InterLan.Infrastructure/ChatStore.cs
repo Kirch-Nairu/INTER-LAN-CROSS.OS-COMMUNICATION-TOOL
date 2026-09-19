@@ -549,6 +549,94 @@ public sealed class ChatStore(SqliteDatabase database)
         return messages;
     }
 
+    public async Task<RecentMessagePageResponse> GetDirectRecentHistoryPageAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        Guid? beforeMessageId,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit is < 1 or > MaxMessagePageSize)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        string? beforeCreated = null;
+        string? beforeId = null;
+
+        if (beforeMessageId is { } cursor)
+        {
+            await using var cursorCommand = connection.CreateCommand();
+            cursorCommand.CommandText =
+                """
+                SELECT created_utc, message_id
+                FROM messages
+                WHERE message_id = $messageId
+                  AND scope_type = 'DIRECT'
+                  AND scope_id = $conversationId;
+                """;
+            cursorCommand.Parameters.AddWithValue("$messageId", cursor.ToString("D"));
+            cursorCommand.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+
+            await using var cursorReader =
+                await cursorCommand.ExecuteReaderAsync(cancellationToken);
+
+            if (!await cursorReader.ReadAsync(cancellationToken))
+                throw new KeyNotFoundException(
+                    "Message cursor was not found in this conversation.");
+
+            beforeCreated = cursorReader.GetString(0);
+            beforeId = cursorReader.GetString(1);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT message_id, scope_type, scope_id, sender_user_id,
+                   client_message_id, body, reply_to_message_id, created_utc,
+                   edited_utc, deleted_utc
+            FROM messages
+            WHERE scope_type = 'DIRECT'
+              AND scope_id = $conversationId
+              AND (
+                  $beforeCreated IS NULL
+                  OR created_utc < $beforeCreated
+                  OR (created_utc = $beforeCreated AND message_id < $beforeId)
+              )
+            ORDER BY created_utc DESC, message_id DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$beforeCreated",
+            beforeCreated is null ? DBNull.Value : beforeCreated);
+        command.Parameters.AddWithValue(
+            "$beforeId",
+            beforeId is null ? DBNull.Value : beforeId);
+        command.Parameters.AddWithValue("$limit", limit + 1);
+
+        var descending = new List<MessageResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            descending.Add(ReadMessage(reader));
+
+        var hasOlder = descending.Count > limit;
+        if (hasOlder)
+            descending.RemoveAt(descending.Count - 1);
+
+        descending.Reverse();
+
+        return new RecentMessagePageResponse(
+            descending,
+            descending.Count == 0 ? null : descending[0].MessageId,
+            hasOlder);
+    }
+
     public async Task<MessagePageResponse> GetDirectHistoryPageAsync(
         Guid actorUserId,
         Guid conversationId,
