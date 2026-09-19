@@ -109,6 +109,20 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? Array.Empty<MessageReceiptResponse>();
     }
 
+    public async Task MarkMessageDeliveredAsync(
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            $"/api/v1/messages/{messageId:D}/delivered",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
