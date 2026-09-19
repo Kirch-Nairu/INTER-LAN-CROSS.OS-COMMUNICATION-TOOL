@@ -209,6 +209,28 @@ app.MapPost("/api/v1/join/exchange", async (
     }
 });
 
+app.MapPost("/api/v1/sessions/{sessionId:guid}/revoke", async (
+    Guid sessionId,
+    HttpContext context,
+    EnrollmentStore enrollment,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var owner = await AuthorizationHelpers.RequireOwnerAsync(context, enrollment, cancellationToken);
+        await enrollment.RevokeSessionAsync(owner.UserId, sessionId, cancellationToken);
+        return Results.NoContent();
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Unauthorized();
+    }
+    catch (KeyNotFoundException exception)
+    {
+        return Results.NotFound(new { error = exception.Message });
+    }
+});
+
 app.MapPost("/api/v1/devices/{deviceId:guid}/revoke", async (
     Guid deviceId,
     HttpContext context,
