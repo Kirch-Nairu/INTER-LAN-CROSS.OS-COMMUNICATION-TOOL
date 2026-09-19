@@ -182,6 +182,11 @@ public sealed record GroupMembershipMutationResponse(
     string Status,
     DateTimeOffset ChangedUtc);
 
+public sealed record GroupMessageReceiptsChangedResponse(
+    Guid GroupId,
+    Guid MessageId,
+    IReadOnlyList<MessageReceiptResponse> Receipts);
+
 public sealed record GroupEventResponse(
     Guid GroupEventId,
     Guid GroupId,
