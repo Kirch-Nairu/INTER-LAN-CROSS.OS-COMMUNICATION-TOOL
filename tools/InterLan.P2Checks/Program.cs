@@ -251,6 +251,23 @@ try
         !bobPreference.IsArchived,
         "direct conversation preference persists pin and mute state");
 
+    await chat.UpdateDirectConversationPreferenceAsync(
+        bob,
+        ab1.ConversationId,
+        new UpdateDirectConversationPreferenceRequest(
+            IsPinned: true,
+            MutedUntilUtc: bobMuteUntil,
+            IsArchived: true));
+
+    var bobVisibleOnly = await chat.ListDirectConversationSummariesAsync(
+        bob,
+        includeArchived: false);
+
+    Check(
+        bobVisibleOnly.All(summary =>
+            summary.ConversationId != ab1.ConversationId),
+        "archived direct conversation is omitted from active summary list");
+
     var aliceAfterBobPreference =
         await chat.GetDirectConversationPreferenceAsync(
             alice,
