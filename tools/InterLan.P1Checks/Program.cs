@@ -205,6 +205,16 @@ try
         secondDeviceSession.DeviceId == secondDeviceDecision.DeviceId,
         "additional approved device receives session for existing user identity");
 
+    var memberSessions = await store.ListOwnSessionsAsync(
+        memberSession.UserId,
+        memberSession.SessionId);
+
+    Check(
+        memberSessions.Count >= 2 &&
+        memberSessions.Count(session => session.Current) == 1 &&
+        memberSessions.Single(session => session.Current).SessionId == memberSession.SessionId,
+        "user session inventory identifies current session across multiple devices");
+
     var secondExchangeRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
         store.ExchangeApprovedJoinAsync(join.RequestId, enrollmentSecret, TimeSpan.FromHours(2)));
     Check(secondExchangeRejected, "enrollment exchange is one-use");
