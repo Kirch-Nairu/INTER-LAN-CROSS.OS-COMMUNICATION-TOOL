@@ -300,6 +300,29 @@ try
 
     Console.WriteLine("PASS realtime message is durable before/after broadcast");
 
+    using var deliveredAck = await memberHttp.PostAsync(
+        $"/api/v1/messages/{persistedMessageId:D}/delivered",
+        content: null);
+    if (!deliveredAck.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine($"FAIL recipient delivery acknowledgement {(int)deliveredAck.StatusCode}: {await deliveredAck.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    var deliveredState = await ownerHttp.GetFromJsonAsync<JsonElement[]>(
+        $"/api/v1/messages/{persistedMessageId:D}/receipts");
+    if (deliveredState is null ||
+        deliveredState.Length != 1 ||
+        deliveredState[0].GetProperty("userId").GetGuid() != memberUserId ||
+        deliveredState[0].GetProperty("deliveredUtc").ValueKind == JsonValueKind.Null ||
+        deliveredState[0].GetProperty("readUtc").ValueKind != JsonValueKind.Null)
+    {
+        Console.Error.WriteLine("FAIL delivered receipt state was not persisted correctly");
+        return 1;
+    }
+
+    Console.WriteLine("PASS realtime recipient explicitly acknowledges durable delivery");
+
     await memberHub.StopAsync();
 
     var offlineClientMessageId = Guid.NewGuid();
