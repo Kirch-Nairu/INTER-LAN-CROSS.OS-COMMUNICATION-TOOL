@@ -53,6 +53,29 @@ try
     Check(
         conversation.ConversationId != Guid.Empty,
         "concurrency fixture creates canonical direct conversation");
+
+    var uniqueWrites = await Task.WhenAll(
+        Enumerable.Range(0, 200)
+            .Select(index => chat.SendDirectMessageAsync(
+                index % 2 == 0 ? alice : bob,
+                conversation.ConversationId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    $"stress-{index:D3}"))));
+
+    Check(
+        uniqueWrites.All(write => write.Created),
+        "two hundred concurrent unique writes persist without lock loss");
+
+    var uniqueHistory = await chat.GetDirectHistoryAsync(
+        alice,
+        conversation.ConversationId,
+        null,
+        250);
+
+    Check(
+        uniqueHistory.Count == 200,
+        "concurrent write history contains every unique message");
 }
 finally
 {
