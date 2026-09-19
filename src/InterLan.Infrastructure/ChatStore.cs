@@ -359,13 +359,9 @@ public sealed class ChatStore(SqliteDatabase database)
         EditMessageRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Body))
-            throw new ArgumentException("Message body is required.");
-        if (request.Body.Length > MaxMessageLength)
-            throw new ArgumentException(
-                $"Message body cannot exceed {MaxMessageLength} characters.");
-
-        var body = request.Body.Trim();
+        var body = MessageTextPolicy.Normalize(
+            request.Body,
+            MaxMessageLength);
 
         await using var connection = database.OpenConnection();
         await RequireDirectMembershipAsync(
