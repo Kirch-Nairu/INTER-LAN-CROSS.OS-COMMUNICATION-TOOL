@@ -149,6 +149,21 @@ try
         TimeSpan.FromHours(2));
 
     Check(memberSession.Role == "MEMBER" && memberSession.DeviceId == decision.DeviceId, "approved device exchanges enrollment secret for member session");
+    Check(!string.IsNullOrWhiteSpace(memberSession.DeviceCredential), "first approved exchange returns durable device credential exactly to client");
+
+    await using (var connection = database.OpenConnection())
+    {
+        await using var credential = connection.CreateCommand();
+        credential.CommandText = "SELECT credential_hash FROM devices WHERE device_id = $id;";
+        credential.Parameters.AddWithValue("$id", decision.DeviceId!.Value.ToString("D"));
+        var persistedCredentialHash = Convert.ToString(await credential.ExecuteScalarAsync())!;
+        Check(
+            persistedCredentialHash == SecretCodec.HashToken(memberSession.DeviceCredential!),
+            "device credential persists only as server-side hash");
+        Check(
+            !persistedCredentialHash.Contains(memberSession.DeviceCredential!, StringComparison.Ordinal),
+            "device credential plaintext is not persisted server-side");
+    }
 
     var secondExchangeRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
         store.ExchangeApprovedJoinAsync(join.RequestId, enrollmentSecret, TimeSpan.FromHours(2)));
@@ -177,6 +192,35 @@ try
         pairingAfterRestart.DeviceId == decision.DeviceId,
         "approved client pairing and active session survive server restart");
 
+    var renewedAfterRestart = await pairingRestartStore.RenewDeviceSessionAsync(
+        decision.DeviceId!.Value,
+        memberSession.DeviceCredential!,
+        TimeSpan.FromHours(1));
+    Check(
+        renewedAfterRestart.UserId == decision.UserId &&
+        renewedAfterRestart.DeviceId == decision.DeviceId &&
+        !string.IsNullOrWhiteSpace(renewedAfterRestart.BearerToken),
+        "paired device credential mints fresh session after server restart");
+
+    var pairingStatePath = Path.Combine(root, "client-pairing", "pairing.state");
+    var pairingState = new ClientPairingState(
+        owner.ServerId,
+        "https://127.0.0.1:7443",
+        cert1.Sha256Fingerprint,
+        decision.DeviceId.Value,
+        memberSession.DeviceCredential!,
+        "Android Chrome",
+        DateTimeOffset.UtcNow);
+
+    var pairingStateStore = new ClientPairingStateStore();
+    await pairingStateStore.SaveAsync(pairingStatePath, pairingState);
+    var restoredPairing = await new ClientPairingStateStore().LoadAsync(pairingStatePath);
+    Check(restoredPairing == pairingState, "client pairing state survives client-store reopen");
+    var pairingBytes = await File.ReadAllBytesAsync(pairingStatePath);
+    Check(
+        !System.Text.Encoding.UTF8.GetString(pairingBytes).Contains(memberSession.DeviceCredential!, StringComparison.Ordinal),
+        "client pairing state does not persist credential as plaintext");
+
     var devicesAfterRestart = await pairingRestartStore.ListDevicesAsync(owner.OwnerUserId);
     Check(
         devicesAfterRestart.Count == 1 &&
@@ -187,6 +231,13 @@ try
     await store.RevokeDeviceAsync(owner.OwnerUserId, decision.DeviceId!.Value);
     var revoked = await store.ValidateSessionAsync(memberSession.BearerToken);
     Check(revoked is null, "device revocation invalidates existing sessions");
+
+    var renewalAfterRevokeRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
+        store.RenewDeviceSessionAsync(
+            decision.DeviceId.Value,
+            memberSession.DeviceCredential!,
+            TimeSpan.FromHours(1)));
+    Check(renewalAfterRevokeRejected, "revoked device credential cannot mint a new session");
 
     var ownerPrincipal = await store.ValidateSessionAsync(ownerSession.BearerToken);
     Check(ownerPrincipal is not null && ownerPrincipal.Role == "OWNER", "owner session remains valid after member revocation");
