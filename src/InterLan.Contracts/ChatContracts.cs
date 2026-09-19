@@ -45,3 +45,8 @@ public sealed record DirectConversationSummaryResponse(
     DateTimeOffset CreatedUtc,
     MessageResponse? LastMessage,
     int UnreadCount);
+
+public sealed record MessagePageResponse(
+    IReadOnlyList<MessageResponse> Items,
+    Guid? NextAfterMessageId,
+    bool HasMore);
