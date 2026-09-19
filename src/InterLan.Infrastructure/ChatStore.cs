@@ -468,7 +468,8 @@ public sealed class ChatStore(SqliteDatabase database)
             update.CommandText =
                 """
                 UPDATE messages
-                SET deleted_utc = $deletedUtc
+                SET body = NULL,
+                    deleted_utc = $deletedUtc
                 WHERE message_id = $messageId
                   AND deleted_utc IS NULL;
                 """;
