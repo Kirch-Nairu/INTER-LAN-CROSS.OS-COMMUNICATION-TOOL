@@ -454,7 +454,85 @@ public sealed class EnrollmentStore(SqliteDatabase database)
                 throw new UnauthorizedAccessException("Enrollment exchange is already consumed.");
         }
 
+        var deviceCredential = SecretCodec.NewToken();
+        await using (var credential = connection.CreateCommand())
+        {
+            credential.Transaction = transaction;
+            credential.CommandText =
+                """
+                UPDATE devices
+                SET credential_hash = $credentialHash
+                WHERE device_id = $deviceId
+                  AND revoked_utc IS NULL;
+                """;
+            credential.Parameters.AddWithValue("$credentialHash", SecretCodec.HashToken(deviceCredential));
+            credential.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            if (await credential.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new UnauthorizedAccessException("Approved device is no longer active.");
+        }
+
         var session = await CreateSessionAsync(connection, userId, deviceId, "MEMBER", lifetime, cancellationToken, transaction);
+        transaction.Commit();
+        return session with { DeviceCredential = deviceCredential };
+    }
+
+    public async Task<SessionResponse> RenewDeviceSessionAsync(
+        Guid deviceId,
+        string deviceCredential,
+        TimeSpan lifetime,
+        CancellationToken cancellationToken = default)
+    {
+        if (deviceId == Guid.Empty || string.IsNullOrWhiteSpace(deviceCredential))
+            throw new UnauthorizedAccessException("Device credential is invalid.");
+
+        await using var connection = database.OpenConnection();
+
+        Guid userId;
+        string role;
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText =
+                """
+                SELECT d.user_id, u.role
+                FROM devices d
+                JOIN users u ON u.user_id = d.user_id
+                WHERE d.device_id = $deviceId
+                  AND d.credential_hash = $credentialHash
+                  AND d.revoked_utc IS NULL
+                  AND u.disabled_utc IS NULL;
+                """;
+            command.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            command.Parameters.AddWithValue("$credentialHash", SecretCodec.HashToken(deviceCredential));
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+                throw new UnauthorizedAccessException("Device credential is invalid or revoked.");
+
+            userId = Guid.Parse(reader.GetString(0));
+            role = reader.GetString(1);
+        }
+
+        using var transaction = connection.BeginTransaction();
+        var session = await CreateSessionAsync(
+            connection,
+            userId,
+            deviceId,
+            role,
+            lifetime,
+            cancellationToken,
+            transaction);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            userId,
+            "DEVICE_SESSION_RENEWED",
+            "DEVICE",
+            deviceId,
+            "{}",
+            DateTimeOffset.UtcNow,
+            cancellationToken);
+
         transaction.Commit();
         return session;
     }

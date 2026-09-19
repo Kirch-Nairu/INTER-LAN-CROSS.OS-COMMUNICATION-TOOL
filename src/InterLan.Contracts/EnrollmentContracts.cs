@@ -22,7 +22,12 @@ public sealed record SessionResponse(
     Guid? DeviceId,
     string Role,
     string BearerToken,
-    DateTimeOffset ExpiresUtc);
+    DateTimeOffset ExpiresUtc,
+    string? DeviceCredential = null);
+
+public sealed record RenewDeviceSessionRequest(
+    Guid DeviceId,
+    string DeviceCredential);
 
 public sealed record CreateInviteRequest(int ValidMinutes = 60);
 

@@ -162,6 +162,25 @@ app.MapPost("/api/v1/auth/owner/login", async (
     }
 }).RequireRateLimiting("auth");
 
+app.MapPost("/api/v1/auth/device/renew", async (
+    RenewDeviceSessionRequest request,
+    EnrollmentStore enrollment,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        return Results.Ok(await enrollment.RenewDeviceSessionAsync(
+            request.DeviceId,
+            request.DeviceCredential,
+            TimeSpan.FromHours(12),
+            cancellationToken));
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Unauthorized();
+    }
+}).RequireRateLimiting("auth");
+
 app.MapPost("/api/v1/invites", async (
     HttpContext context,
     CreateInviteRequest request,
