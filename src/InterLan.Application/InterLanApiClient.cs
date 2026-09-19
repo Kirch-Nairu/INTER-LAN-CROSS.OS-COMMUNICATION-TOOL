@@ -127,7 +127,7 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Delivery receipt response was empty.");
     }
 
-    public async Task MarkMessageReadAsync(
+    public async Task<MessageReceiptsChangedResponse> MarkMessageReadAsync(
         Guid messageId,
         CancellationToken cancellationToken = default)
     {
@@ -139,6 +139,10 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             cancellationToken);
 
         response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageReceiptsChangedResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Read receipt response was empty.");
     }
 
     public async Task<RealtimeTicketResponse> CreateRealtimeTicketAsync(
