@@ -167,3 +167,17 @@ public sealed record GroupDetailsResponse(
 public sealed record UpdateGroupRequest(
     string Name,
     string? Topic);
+
+public sealed record AddGroupMemberRequest(
+    Guid UserId,
+    string Role = "MEMBER");
+
+public sealed record UpdateGroupMemberRoleRequest(
+    string Role);
+
+public sealed record GroupMembershipMutationResponse(
+    Guid GroupId,
+    Guid UserId,
+    string? Role,
+    string Status,
+    DateTimeOffset ChangedUtc);
