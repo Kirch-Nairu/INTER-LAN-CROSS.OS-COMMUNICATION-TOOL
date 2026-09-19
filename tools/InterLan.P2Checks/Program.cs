@@ -1,0 +1,161 @@
+using InterLan.Contracts;
+using InterLan.Infrastructure;
+
+var failures = new List<string>();
+
+void Check(bool condition, string name)
+{
+    Console.WriteLine($"{(condition ? "PASS" : "FAIL")} {name}");
+    if (!condition) failures.Add(name);
+}
+
+async Task<bool> ThrowsAsync<T>(Func<Task> action) where T : Exception
+{
+    try
+    {
+        await action();
+        return false;
+    }
+    catch (T)
+    {
+        return true;
+    }
+}
+
+var root = Path.Combine(Path.GetTempPath(), "interlan-p2-" + Guid.NewGuid().ToString("N"));
+Directory.CreateDirectory(root);
+
+try
+{
+    var database = new SqliteDatabase(Path.Combine(root, "p2.db"));
+    await database.InitializeAsync();
+
+    var alice = Guid.NewGuid();
+    var bob = Guid.NewGuid();
+    var carol = Guid.NewGuid();
+
+    await using (var connection = database.OpenConnection())
+    {
+        foreach (var user in new[]
+        {
+            (alice, "alice", "Alice"),
+            (bob, "bob", "Bob"),
+            (carol, "carol", "Carol")
+        })
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                """
+                INSERT INTO users (user_id, username, display_name, role, created_utc)
+                VALUES ($id, $username, $display, 'MEMBER', $utc);
+                """;
+            command.Parameters.AddWithValue("$id", user.Item1.ToString("D"));
+            command.Parameters.AddWithValue("$username", user.Item2);
+            command.Parameters.AddWithValue("$display", user.Item3);
+            command.Parameters.AddWithValue("$utc", DateTimeOffset.UtcNow.ToString("O"));
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+
+    var chat = new ChatStore(database);
+
+    var users = await chat.ListUsersAsync(alice);
+    Check(users.Count == 3, "authenticated user directory returns active users");
+
+    var ab1 = await chat.GetOrCreateDirectConversationAsync(alice, bob);
+    var ab2 = await chat.GetOrCreateDirectConversationAsync(bob, alice);
+    Check(ab1.ConversationId == ab2.ConversationId, "same user pair resolves to one canonical direct conversation");
+
+    var ac = await chat.GetOrCreateDirectConversationAsync(alice, carol);
+    Check(ac.ConversationId != ab1.ConversationId, "different pair gets different conversation");
+
+    var listed = await chat.ListDirectConversationsAsync(alice);
+    Check(listed.Count == 2, "direct conversation listing is membership scoped");
+
+    var client1 = Guid.NewGuid();
+    var first = await chat.SendDirectMessageAsync(
+        alice,
+        ab1.ConversationId,
+        new SendMessageRequest(client1, "hello bob"));
+
+    var duplicate = await chat.SendDirectMessageAsync(
+        alice,
+        ab1.ConversationId,
+        new SendMessageRequest(client1, "hello bob"));
+
+    Check(first.Created && !duplicate.Created && first.Message.MessageId == duplicate.Message.MessageId,
+        "duplicate client message ID is idempotent");
+
+    await Task.Delay(2);
+
+    var second = await chat.SendDirectMessageAsync(
+        bob,
+        ab1.ConversationId,
+        new SendMessageRequest(Guid.NewGuid(), "hello alice"));
+
+    var history = await chat.GetDirectHistoryAsync(alice, ab1.ConversationId, null, 100);
+    Check(history.Count == 2 && history[0].MessageId == first.Message.MessageId &&
+          history[1].MessageId == second.Message.MessageId,
+        "direct history is ordered and durable");
+
+    var catchup = await chat.GetDirectHistoryAsync(alice, ab1.ConversationId, first.Message.MessageId, 100);
+    Check(catchup.Count == 1 && catchup[0].MessageId == second.Message.MessageId,
+        "message cursor returns reconnect catch-up without duplicates");
+
+    Check(await ThrowsAsync<UnauthorizedAccessException>(() =>
+        chat.GetDirectHistoryAsync(carol, ab1.ConversationId, null, 100)),
+        "non-member cannot read another direct conversation");
+
+    Check(await ThrowsAsync<UnauthorizedAccessException>(() =>
+        chat.SendDirectMessageAsync(
+            carol,
+            ab1.ConversationId,
+            new SendMessageRequest(Guid.NewGuid(), "intrusion"))),
+        "non-member cannot send into another direct conversation");
+
+    Check(await ThrowsAsync<ArgumentException>(() =>
+        chat.SendDirectMessageAsync(
+            alice,
+            ab1.ConversationId,
+            new SendMessageRequest(Guid.NewGuid(), new string('x', ChatStore.MaxMessageLength + 1)))),
+        "oversized message fails closed");
+
+    await chat.MarkReadAsync(bob, first.Message.MessageId);
+    await chat.MarkReadAsync(bob, first.Message.MessageId);
+
+    await using (var connection = database.OpenConnection())
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT COUNT(1)
+            FROM message_receipts
+            WHERE message_id = $messageId
+              AND user_id = $userId
+              AND read_utc IS NOT NULL;
+            """;
+        command.Parameters.AddWithValue("$messageId", first.Message.MessageId.ToString("D"));
+        command.Parameters.AddWithValue("$userId", bob.ToString("D"));
+        Check(Convert.ToInt64(await command.ExecuteScalarAsync()) == 1,
+            "read receipt is idempotent");
+    }
+
+    var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
+    await reopened.InitializeAsync();
+    var reopenedChat = new ChatStore(reopened);
+    var afterRestart = await reopenedChat.GetDirectHistoryAsync(alice, ab1.ConversationId, null, 100);
+    Check(afterRestart.Count == 2, "message history survives database restart");
+}
+finally
+{
+    try { Directory.Delete(root, true); } catch { }
+}
+
+if (failures.Count > 0)
+{
+    Console.Error.WriteLine($"P2 checks failed: {string.Join(", ", failures)}");
+    return 1;
+}
+
+Console.WriteLine("INTER-LAN P2 DIRECT MESSAGING CHECKS: PASS");
+return 0;
