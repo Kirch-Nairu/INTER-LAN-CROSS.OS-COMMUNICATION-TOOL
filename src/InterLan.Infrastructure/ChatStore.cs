@@ -220,12 +220,45 @@ public sealed class ChatStore(SqliteDatabase database)
                     await unread.ExecuteScalarAsync(cancellationToken));
             }
 
+            bool isPinned = false;
+            DateTimeOffset? mutedUntilUtc = null;
+            bool isArchived = false;
+
+            await using (var preference = connection.CreateCommand())
+            {
+                preference.CommandText =
+                    """
+                    SELECT pinned_utc, muted_until_utc, archived_utc
+                    FROM direct_conversation_preferences
+                    WHERE conversation_id = $conversationId
+                      AND user_id = $actor;
+                    """;
+                preference.Parameters.AddWithValue(
+                    "$conversationId",
+                    conversation.ConversationId.ToString("D"));
+                preference.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+
+                await using var preferenceReader =
+                    await preference.ExecuteReaderAsync(cancellationToken);
+                if (await preferenceReader.ReadAsync(cancellationToken))
+                {
+                    isPinned = !preferenceReader.IsDBNull(0);
+                    mutedUntilUtc = preferenceReader.IsDBNull(1)
+                        ? null
+                        : DateTimeOffset.Parse(preferenceReader.GetString(1));
+                    isArchived = !preferenceReader.IsDBNull(2);
+                }
+            }
+
             summaries.Add(new DirectConversationSummaryResponse(
                 conversation.ConversationId,
                 conversation.OtherUser,
                 conversation.CreatedUtc,
                 lastMessage,
-                unreadCount));
+                unreadCount,
+                isPinned,
+                mutedUntilUtc,
+                isArchived));
         }
 
         return summaries
