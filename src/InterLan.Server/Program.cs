@@ -13,6 +13,10 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Browser SignalR transports may need the standard access_token query parameter.
+// Suppress framework request-start logging so bearer material is not written to logs.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+
 var dataDirectory = Environment.GetEnvironmentVariable("INTERLAN_DATA_DIR");
 if (string.IsNullOrWhiteSpace(dataDirectory))
 {
