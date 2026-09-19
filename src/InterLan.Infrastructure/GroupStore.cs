@@ -434,7 +434,8 @@ public sealed class GroupStore(SqliteDatabase database)
                 throw new InvalidOperationException("Removed group membership could not be restored.");
         }
 
-        var payload = $"{{\"role\":\"{requestedRole}\"}}";
+        var payload =
+            $"{{\"userId\":\"{request.UserId:D}\",\"role\":\"{requestedRole}\"}}";
 
         await AppendGroupEventAsync(
             connection,
@@ -533,7 +534,8 @@ public sealed class GroupStore(SqliteDatabase database)
                 throw new InvalidOperationException("Group membership removal lost its authority race.");
         }
 
-        var payload = $"{{\"previousRole\":\"{target.Value.Role}\"}}";
+        var payload =
+            $"{{\"userId\":\"{targetUserId:D}\",\"previousRole\":\"{target.Value.Role}\"}}";
 
         await AppendGroupEventAsync(
             connection,
@@ -641,7 +643,7 @@ public sealed class GroupStore(SqliteDatabase database)
         }
 
         var payload =
-            $"{{\"previousRole\":\"{previousRole}\",\"role\":\"{requestedRole}\"}}";
+            $"{{\"userId\":\"{targetUserId:D}\",\"previousRole\":\"{previousRole}\",\"role\":\"{requestedRole}\"}}";
 
         await AppendGroupEventAsync(
             connection,
