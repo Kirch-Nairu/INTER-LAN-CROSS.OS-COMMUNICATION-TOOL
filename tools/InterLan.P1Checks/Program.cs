@@ -222,6 +222,11 @@ try
     var principal = await store.ValidateSessionAsync(memberSession.BearerToken);
     Check(principal is not null && principal.Role == "MEMBER", "active member session validates");
 
+    var devicesAfterActivity = await store.ListDevicesAsync(owner.OwnerUserId);
+    Check(
+        devicesAfterActivity.Single(device => device.DeviceId == decision.DeviceId).LastSeenUtc is not null,
+        "session validation updates durable device activity");
+
     var pairingRestartDatabase = new SqliteDatabase(Path.Combine(root, "p1.db"));
     await pairingRestartDatabase.InitializeAsync();
     var pairingRestartStore = new EnrollmentStore(pairingRestartDatabase);
