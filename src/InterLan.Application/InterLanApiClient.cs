@@ -265,6 +265,20 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? Array.Empty<SessionSummaryResponse>();
     }
 
+    public async Task RevokeSessionAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            $"/api/v1/auth/sessions/{sessionId:D}/revoke",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
