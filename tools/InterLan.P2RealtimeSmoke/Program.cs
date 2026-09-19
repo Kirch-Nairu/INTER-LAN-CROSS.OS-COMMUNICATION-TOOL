@@ -257,6 +257,26 @@ var baseUri = server.BaseUri;
         }
     });
 
+    var deliveredReceiptEvent = new TaskCompletionSource<JsonElement>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+    var readReceiptEvent = new TaskCompletionSource<JsonElement>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+
+    memberHub.On<JsonElement>("ReceiptUpdated", payload =>
+    {
+        if (!payload.TryGetProperty("receipts", out var receipts) ||
+            receipts.GetArrayLength() == 0)
+        {
+            return;
+        }
+
+        var receipt = receipts[0];
+        if (receipt.GetProperty("readUtc").ValueKind == JsonValueKind.Null)
+            deliveredReceiptEvent.TrySetResult(payload);
+        else
+            readReceiptEvent.TrySetResult(payload);
+    });
+
     await memberHub.StartAsync();
 
     var clientMessageId = Guid.NewGuid();
@@ -318,7 +338,15 @@ var baseUri = server.BaseUri;
         return 1;
     }
 
-    Console.WriteLine("PASS realtime recipient explicitly acknowledges durable delivery");
+    var deliveredRealtimeReceipt = await deliveredReceiptEvent.Task.WaitAsync(
+        TimeSpan.FromSeconds(5));
+    if (deliveredRealtimeReceipt.GetProperty("messageId").GetGuid() != persistedMessageId)
+    {
+        Console.Error.WriteLine("FAIL realtime delivery receipt event payload mismatch");
+        return 1;
+    }
+
+    Console.WriteLine("PASS delivery acknowledgement broadcasts realtime receipt state");
 
     using var readAck = await memberHttp.PostAsync(
         $"/api/v1/messages/{persistedMessageId:D}/read",
