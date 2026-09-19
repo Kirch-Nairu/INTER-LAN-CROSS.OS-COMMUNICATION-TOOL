@@ -104,33 +104,7 @@ app.UseRateLimiter();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapGet("/health", () => Results.Ok(new
-{
-    status = "ok",
-    apiVersion = ApiContractVersion.Current,
-    utc = DateTimeOffset.UtcNow
-}));
-
-app.MapGet("/api/v1/server/info", async (
-    IServerIdentityStore identities,
-    ServerCertificateDescriptor cert,
-    CancellationToken cancellationToken) =>
-{
-    var identity = await identities.GetAsync(cancellationToken);
-    return Results.Ok(new
-    {
-        server = new ServerInfoResponse(
-            ApiContractVersion.Current,
-            identity is not null,
-            identity?.ServerId,
-            identity?.ServerName,
-            identity is null ? RuntimeMode.Unconfigured : RuntimeMode.ServerOwner,
-            NativeDesktopSupported: true,
-            WebClientSupported: true),
-        httpsPort = port,
-        certificateSha256 = cert.Sha256Fingerprint
-    });
-});
+app.MapInterLanSystemEndpoints();
 
 app.MapPost("/api/v1/bootstrap/server", async (
     HttpContext context,
