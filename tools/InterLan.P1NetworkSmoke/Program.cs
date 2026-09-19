@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
@@ -24,24 +25,39 @@ if (!File.Exists(serverDll))
     return 1;
 }
 
+var startInfo = new ProcessStartInfo
+{
+    FileName = "dotnet",
+    WorkingDirectory = repositoryRoot,
+    UseShellExecute = false,
+    RedirectStandardOutput = true,
+    RedirectStandardError = true
+};
+startInfo.ArgumentList.Add(serverDll);
+startInfo.Environment["INTERLAN_DATA_DIR"] = root;
+startInfo.Environment["InterLan__Server__Port"] = port.ToString();
+startInfo.Environment["InterLan__Server__DiscoveryEnabled"] = "false";
+
+var output = new ConcurrentQueue<string>();
+var errors = new ConcurrentQueue<string>();
+
 using var process = new Process
 {
-    StartInfo = new ProcessStartInfo
-    {
-        FileName = "dotnet",
-        Arguments = $"\"{serverDll}\"",
-        WorkingDirectory = repositoryRoot,
-        UseShellExecute = false,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true
-    }
+    StartInfo = startInfo,
+    EnableRaisingEvents = true
+};
+process.OutputDataReceived += (_, eventArgs) =>
+{
+    if (eventArgs.Data is not null) output.Enqueue(eventArgs.Data);
+};
+process.ErrorDataReceived += (_, eventArgs) =>
+{
+    if (eventArgs.Data is not null) errors.Enqueue(eventArgs.Data);
 };
 
-process.StartInfo.Environment["INTERLAN_DATA_DIR"] = root;
-process.StartInfo.Environment["InterLan__Server__Port"] = port.ToString();
-process.StartInfo.Environment["InterLan__Server__DiscoveryEnabled"] = "false";
-
 process.Start();
+process.BeginOutputReadLine();
+process.BeginErrorReadLine();
 
 using var handler = new HttpClientHandler
 {
@@ -81,7 +97,9 @@ try
 
     if (!ready)
     {
-        Console.Error.WriteLine("FAIL HTTPS server did not become healthy.");
+        Console.Error.WriteLine($"FAIL HTTPS server did not become healthy on port {port}. ProcessExited={process.HasExited} ExitCode={(process.HasExited ? process.ExitCode : -1)}");
+        foreach (var line in output.TakeLast(40)) Console.Error.WriteLine($"SERVER OUT: {line}");
+        foreach (var line in errors.TakeLast(40)) Console.Error.WriteLine($"SERVER ERR: {line}");
         return 1;
     }
 
