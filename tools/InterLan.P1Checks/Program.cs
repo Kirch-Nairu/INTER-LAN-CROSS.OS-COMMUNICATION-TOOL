@@ -166,6 +166,37 @@ try
             "device credential plaintext is not persisted server-side");
     }
 
+    var secondDeviceInvite = await store.CreateInviteAsync(owner.OwnerUserId, TimeSpan.FromMinutes(30));
+    var secondDeviceSecret = SecretCodec.NewToken();
+    var secondDeviceJoin = await store.SubmitJoinAsync(new SubmitJoinRequest(
+        secondDeviceInvite.InviteToken,
+        "member1",
+        "Member One",
+        "Member One Laptop",
+        "windows",
+        secondDeviceSecret));
+
+    var secondDeviceDecision = await store.DecideJoinAsync(
+        owner.OwnerUserId,
+        secondDeviceJoin.RequestId,
+        approve: true,
+        existingUserId: decision.UserId!.Value);
+
+    Check(
+        secondDeviceDecision.UserId == decision.UserId &&
+        secondDeviceDecision.DeviceId != decision.DeviceId,
+        "owner can attach another approved device to an existing user");
+
+    var secondDeviceSession = await store.ExchangeApprovedJoinAsync(
+        secondDeviceJoin.RequestId,
+        secondDeviceSecret,
+        TimeSpan.FromHours(2));
+
+    Check(
+        secondDeviceSession.UserId == memberSession.UserId &&
+        secondDeviceSession.DeviceId == secondDeviceDecision.DeviceId,
+        "additional approved device receives session for existing user identity");
+
     var secondExchangeRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
         store.ExchangeApprovedJoinAsync(join.RequestId, enrollmentSecret, TimeSpan.FromHours(2)));
     Check(secondExchangeRejected, "enrollment exchange is one-use");
