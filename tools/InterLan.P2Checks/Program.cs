@@ -193,6 +193,15 @@ try
         deliveredReceipts[0].ReadUtc is null,
         "recipient delivery acknowledgement is durable and idempotent");
 
+    var bobBeforeReadSummaries =
+        await chat.ListDirectConversationSummariesAsync(bob);
+    var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
+        summary.ConversationId == ab1.ConversationId);
+    Check(
+        bobBeforeRead.UnreadCount == 1 &&
+        bobBeforeRead.LastMessage?.MessageId == second.Message.MessageId,
+        "conversation summary projects last message and recipient unread count");
+
     await chat.MarkReadAsync(bob, first.Message.MessageId);
     await chat.MarkReadAsync(bob, first.Message.MessageId);
 
