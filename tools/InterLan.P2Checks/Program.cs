@@ -451,6 +451,26 @@ try
             20)),
         "non-member cannot search another direct conversation");
 
+    var aliceGlobalSearch = await chat.SearchAllDirectMessagesAsync(
+        alice,
+        "concurrent-0",
+        100);
+
+    Check(
+        aliceGlobalSearch.Hits.Count > 0 &&
+        aliceGlobalSearch.Hits.All(hit =>
+            hit.ConversationId == ac.ConversationId),
+        "global direct search returns only authorized matching conversations");
+
+    var bobGlobalSearch = await chat.SearchAllDirectMessagesAsync(
+        bob,
+        "concurrent-0",
+        100);
+
+    Check(
+        bobGlobalSearch.Hits.Count == 0,
+        "global direct search does not leak another conversation");
+
     var searchResult = await chat.SearchDirectMessagesAsync(
         carol,
         ac.ConversationId,
