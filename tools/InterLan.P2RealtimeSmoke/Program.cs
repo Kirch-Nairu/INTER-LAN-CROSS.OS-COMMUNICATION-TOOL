@@ -30,6 +30,22 @@ static HubConnection CreateHub(Uri baseUri, string token)
         .Build();
 }
 
+static HubConnection CreateTicketHub(Uri baseUri, string ticket)
+{
+    return new HubConnectionBuilder()
+        .WithUrl(
+            new Uri(baseUri, $"/hubs/chat?ticket={Uri.EscapeDataString(ticket)}"),
+            options =>
+            {
+                options.HttpMessageHandlerFactory = _ => new HttpClientHandler
+                {
+                    UseProxy = false,
+                    ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+                };
+            })
+        .Build();
+}
+
 static void Bearer(HttpClient client, string token) =>
     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -177,6 +193,47 @@ var baseUri = server.BaseUri;
     deviceCredential = rotatedConnection.Session.DeviceCredential!;
     memberToken = rotatedConnection.Session.BearerToken;
     Bearer(memberHttp, memberToken);
+
+    using var realtimeTicketResponse = await memberHttp.PostAsync(
+        "/api/v1/realtime/ticket",
+        content: null);
+    if (!realtimeTicketResponse.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine(
+            $"FAIL realtime ticket issue {(int)realtimeTicketResponse.StatusCode}: {await realtimeTicketResponse.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    var realtimeTicketEnvelope =
+        await realtimeTicketResponse.Content.ReadFromJsonAsync<JsonElement>();
+    var realtimeTicket = realtimeTicketEnvelope.GetProperty("ticket").GetString()!;
+
+    await using (var ticketHub = CreateTicketHub(baseUri, realtimeTicket))
+    {
+        await ticketHub.StartAsync();
+        await ticketHub.StopAsync();
+    }
+
+    var ticketReplayRejected = false;
+    await using (var replayHub = CreateTicketHub(baseUri, realtimeTicket))
+    {
+        try
+        {
+            await replayHub.StartAsync();
+        }
+        catch
+        {
+            ticketReplayRejected = true;
+        }
+    }
+
+    if (!ticketReplayRejected)
+    {
+        Console.Error.WriteLine("FAIL realtime ticket replay was accepted");
+        return 1;
+    }
+
+    Console.WriteLine("PASS browser realtime ticket is single-use and bearer-free");
 
     var dmResponse = await ownerHttp.PostAsJsonAsync("/api/v1/direct", new { otherUserId = memberUserId });
     if (!dmResponse.IsSuccessStatusCode)
