@@ -262,7 +262,9 @@ public sealed class ChatStore(SqliteDatabase database)
         }
 
         return summaries
-            .OrderByDescending(summary =>
+            .OrderBy(summary => summary.IsArchived)
+            .ThenByDescending(summary => summary.IsPinned)
+            .ThenByDescending(summary =>
                 summary.LastMessage?.CreatedUtc ?? summary.CreatedUtc)
             .ThenByDescending(summary => summary.ConversationId)
             .ToArray();
