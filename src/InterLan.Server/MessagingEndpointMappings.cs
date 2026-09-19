@@ -392,13 +392,48 @@ public static class MessagingEndpointMappings
             HttpContext context,
             EnrollmentStore enrollment,
             ChatStore chat,
+            IHubContext<ChatHub> hub,
             CancellationToken cancellationToken) =>
         {
             try
             {
-                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(context, enrollment, cancellationToken);
-                await chat.MarkDeliveredAsync(principal.UserId, messageId, cancellationToken);
-                return Results.NoContent();
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                await chat.MarkDeliveredAsync(
+                    principal.UserId,
+                    messageId,
+                    cancellationToken);
+
+                var conversationId = await chat.GetDirectConversationIdForMessageAsync(
+                    principal.UserId,
+                    messageId,
+                    cancellationToken);
+
+                var receipts = await chat.GetReceiptsAsync(
+                    principal.UserId,
+                    messageId,
+                    cancellationToken);
+
+                var payload = new MessageReceiptsChangedResponse(
+                    conversationId,
+                    messageId,
+                    receipts);
+
+                var members = await chat.GetDirectMemberIdsAsync(
+                    principal.UserId,
+                    conversationId,
+                    cancellationToken);
+
+                foreach (var memberId in members)
+                {
+                    await hub.Clients.Group(ChatHub.UserGroup(memberId))
+                        .SendAsync("ReceiptUpdated", payload, cancellationToken);
+                }
+
+                return Results.Ok(payload);
             }
             catch (UnauthorizedAccessException)
             {
