@@ -106,6 +106,16 @@ try
     var users = await chat.ListUsersAsync(alice);
     Check(users.Count == 3, "authenticated user directory returns active users");
 
+    var directorySearch = await chat.SearchUsersAsync(
+        alice,
+        "bob",
+        10);
+
+    Check(
+        directorySearch.Users.Count == 1 &&
+        directorySearch.Users[0].UserId == bob,
+        "user directory search returns active matching peer");
+
     var ab1 = await chat.GetOrCreateDirectConversationAsync(alice, bob);
     var ab2 = await chat.GetOrCreateDirectConversationAsync(bob, alice);
     Check(ab1.ConversationId == ab2.ConversationId, "same user pair resolves to one canonical direct conversation");
