@@ -87,3 +87,15 @@ public sealed record DirectConversationActivityResponse(
     DateTimeOffset ActivityUtc,
     Guid? LastMessageId,
     int UnreadCount);
+
+public sealed record DirectConversationPreferenceResponse(
+    Guid ConversationId,
+    bool IsPinned,
+    DateTimeOffset? MutedUntilUtc,
+    bool IsArchived,
+    DateTimeOffset UpdatedUtc);
+
+public sealed record UpdateDirectConversationPreferenceRequest(
+    bool IsPinned,
+    DateTimeOffset? MutedUntilUtc,
+    bool IsArchived);
