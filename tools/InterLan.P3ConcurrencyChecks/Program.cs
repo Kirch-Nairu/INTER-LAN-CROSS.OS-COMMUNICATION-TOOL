@@ -9,6 +9,27 @@ void Check(bool condition, string name)
     if (!condition) failures.Add(name);
 }
 
+async Task<string> CaptureMutationAsync(Func<Task> mutation)
+{
+    try
+    {
+        await mutation();
+        return "SUCCESS";
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return "UNAUTHORIZED";
+    }
+    catch (KeyNotFoundException)
+    {
+        return "NOT_FOUND";
+    }
+    catch (Exception exception)
+    {
+        return $"ERROR:{exception.GetType().Name}:{exception.Message}";
+    }
+}
+
 var root = Path.Combine(
     Path.GetTempPath(),
     "interlan-p3-concurrency-" + Guid.NewGuid().ToString("N"));
@@ -24,6 +45,8 @@ try
     var adminId = Guid.NewGuid();
     var memberId = Guid.NewGuid();
     var lateMemberId = Guid.NewGuid();
+    var sendRaceMemberId = Guid.NewGuid();
+    var roleRaceMemberId = Guid.NewGuid();
 
     await using (var connection = database.OpenConnection())
     {
@@ -32,7 +55,9 @@ try
             (ownerId, "p3-owner", "P3 Owner", "OWNER"),
             (adminId, "p3-admin", "P3 Admin", "MEMBER"),
             (memberId, "p3-member", "P3 Member", "MEMBER"),
-            (lateMemberId, "p3-late", "P3 Late Member", "MEMBER")
+            (lateMemberId, "p3-late", "P3 Late Member", "MEMBER"),
+            (sendRaceMemberId, "p3-send-race", "P3 Send Race", "MEMBER"),
+            (roleRaceMemberId, "p3-role-race", "P3 Role Race", "MEMBER")
         })
         {
             await using var insert = connection.CreateCommand();
@@ -160,6 +185,88 @@ try
         lateMember.Role is "ADMIN" or "MEMBER",
         "concurrent role mutation leaves assignable final role");
 
+    await groups.AddMemberAsync(
+        ownerId,
+        group.GroupId,
+        new AddGroupMemberRequest(sendRaceMemberId));
+    await groups.AddMemberAsync(
+        ownerId,
+        group.GroupId,
+        new AddGroupMemberRequest(roleRaceMemberId));
+
+    var removeVsSendClientId = Guid.NewGuid();
+    var removeVsSend = await Task.WhenAll(
+        CaptureMutationAsync(async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                sendRaceMemberId,
+                group.GroupId,
+                new SendMessageRequest(
+                    removeVsSendClientId,
+                    "remove-vs-send-race"));
+        }),
+        CaptureMutationAsync(async () =>
+        {
+            await groups.RemoveMemberAsync(
+                ownerId,
+                group.GroupId,
+                sendRaceMemberId);
+        }));
+
+    Check(
+        removeVsSend[1] == "SUCCESS" &&
+        removeVsSend[0] is "SUCCESS" or "UNAUTHORIZED",
+        "remove-vs-send race linearizes without lock or authority failure");
+
+    var postRemovalSend = await CaptureMutationAsync(async () =>
+    {
+        await groups.SendGroupMessageAsync(
+            sendRaceMemberId,
+            group.GroupId,
+            new SendMessageRequest(
+                Guid.NewGuid(),
+                "post-removal-send"));
+    });
+
+    Check(
+        postRemovalSend == "UNAUTHORIZED",
+        "remove-vs-send race leaves member immediately unable to send");
+
+    var removeVsRole = await Task.WhenAll(
+        CaptureMutationAsync(async () =>
+        {
+            await groups.UpdateMemberRoleAsync(
+                ownerId,
+                group.GroupId,
+                roleRaceMemberId,
+                new UpdateGroupMemberRoleRequest("ADMIN"));
+        }),
+        CaptureMutationAsync(async () =>
+        {
+            await groups.RemoveMemberAsync(
+                ownerId,
+                group.GroupId,
+                roleRaceMemberId);
+        }));
+
+    Check(
+        removeVsRole[1] == "SUCCESS" &&
+        removeVsRole[0] is "SUCCESS" or "NOT_FOUND",
+        "remove-vs-role race linearizes without lock or authority failure");
+
+    var roleAfterRemoval = await CaptureMutationAsync(async () =>
+    {
+        await groups.UpdateMemberRoleAsync(
+            ownerId,
+            group.GroupId,
+            roleRaceMemberId,
+            new UpdateGroupMemberRoleRequest("ADMIN"));
+    });
+
+    Check(
+        roleAfterRemoval == "NOT_FOUND",
+        "removed member cannot be role-mutated after the race");
+
     var receiptTargets = history
         .Take(120)
         .ToArray();
@@ -181,6 +288,24 @@ try
         receiptProof[0].ReadUtc is not null &&
         receiptProof[0].DeliveredUtc is not null,
         "concurrent group receipt writes retain monotonic read state");
+
+    await groups.RemoveMemberAsync(
+        ownerId,
+        group.GroupId,
+        lateMemberId);
+
+    var concurrentRestores = await Task.WhenAll(
+        Enumerable.Range(0, 32)
+            .Select(_ => groups.AddMemberAsync(
+                ownerId,
+                group.GroupId,
+                new AddGroupMemberRequest(lateMemberId, "MEMBER"))));
+
+    Check(
+        concurrentRestores.Count(result => result.Status == "ADDED") == 1 &&
+        concurrentRestores.All(result =>
+            result.Status is "ADDED" or "UNCHANGED"),
+        "concurrent identical membership restores converge to one active row");
 
     await groups.RemoveMemberAsync(
         ownerId,
