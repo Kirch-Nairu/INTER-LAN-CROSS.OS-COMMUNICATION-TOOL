@@ -6,52 +6,64 @@ Native-first LAN communication platform with configurable server ownership, nati
 
 Technical Authority: **Kirch Ivan Balite**
 
-Overall V1 plan: GitHub Issue #1.
+Overall V1 product plan: GitHub Issue #1.
 
-Accepted P0 authority:
-`main@8216a327c7c30b82866bd42af444bd10c868c0bf`
+Accepted main authority:
 
-Active implementation branch:
-`KIRCH-INTERLAN-P1-LAN-IDENTITY`
+`91c010dd3bd448fc9bd5ec9159e94262569e3e79`
 
-## P1 — LAN Connectivity and Identity
+Active implementation:
 
-P1 adds:
+`P2 — Direct Messaging + Durable Pairing`
 
-- persistent owner-host TLS identity;
-- stable SHA-256 certificate fingerprint;
-- HTTPS Kestrel server;
-- UDP multicast LAN discovery plus manual-address fallback;
-- one-time loopback owner bootstrap;
-- PBKDF2 owner authentication;
-- one-use hashed invite tokens;
-- pending join requests;
-- explicit owner approval/rejection;
-- approved member/device creation;
-- one-use enrollment-secret exchange;
-- hashed bearer sessions;
-- device/session revocation;
-- server-side audit events.
+Branch:
 
-Android remains a responsive web client served by the owner server. It cannot host or become the canonical server.
+`KIRCH-INTERLAN-P2-DIRECT-MESSAGING`
 
-P1 intentionally does **not** implement direct messages, group chat, file transfer, or Telegram archival.
+Repository-local execution authority lives under `00-HANDOFF/`, beginning with:
 
-## P1 validation
+- `INTERLAN_V1_CODE_CAMPAIGN.md`
+- `INTERLAN_EXECUTION_STATE.md`
+- `INTERLAN_COMMIT_LEDGER.md`
+- `INTERLAN_INVARIANTS.md`
+- `INTERLAN_KNOWN_RISKS.md`
+- `INTERLAN_FINAL_CICD_CONTRACT.md`
 
-```bash
-dotnet restore InterLan.sln
-dotnet build InterLan.sln -c Release
-dotnet run --project tools/InterLan.P1Checks/InterLan.P1Checks.csproj -c Release
+## Current implemented foundation
+
+- .NET 10;
+- Avalonia desktop shell;
+- ASP.NET Core/Kestrel HTTPS owner server;
+- SQLite migrations;
+- persistent server TLS identity/fingerprint;
+- LAN discovery + manual address path;
+- one-time owner bootstrap;
+- invite/join/approval;
+- durable approved devices and revocable sessions;
+- durable device credential/session renewal;
+- native certificate-pinned paired-session restore;
+- direct conversations;
+- durable ordered direct messages;
+- SignalR realtime delivery;
+- cursor catch-up;
+- read-receipt storage;
+- duplicate-send suppression.
+
+The desktop and web surfaces are not yet complete end-user products. Current campaign work closes P2 invariants, then proceeds through groups, files, Telegram archive, full clients/product composition, and hardening.
+
+## Development policy
+
+The P2–P7 campaign is code-first:
+
+```text
+code
+→ local proof
+→ atomic commit
+→ phase acceptance
+→ normal merge
 ```
 
-Web shell:
-
-```bash
-cd web-client
-npm install
-npm run build
-```
+New CI/CD architecture is deferred until P7 code freeze. Test code, migration tests, local publish composition, dependency locking, portability work, and executable smoke suites are implemented during the code campaign.
 
 ## Local server
 
@@ -61,6 +73,6 @@ dotnet run --project src/InterLan.Server/InterLan.Server.csproj
 
 Default HTTPS port is `7443`.
 
-The owner server creates `server-cert.pem` and `server-key.pem` under its data directory if they do not already exist. Native clients should pin the advertised SHA-256 fingerprint after explicit pairing.
+The owner server creates its local TLS certificate/private key in the configured data directory. Native clients pin the advertised SHA-256 fingerprint after explicit pairing.
 
-The Android/browser client may require the local certificate to be explicitly trusted/accepted by the user. P1 does not claim public-CA trust.
+The browser client may require explicit trust/acceptance of the locally generated certificate. V1 does not claim public-CA trust or end-to-end encryption.
