@@ -174,6 +174,27 @@ try
         readReceipts[0].ReadUtc is not null,
         "recipient read acknowledgement advances receipt state idempotently");
 
+    var concurrentSends = await Task.WhenAll(
+        Enumerable.Range(0, 20)
+            .Select(index => chat.SendDirectMessageAsync(
+                alice,
+                ac.ConversationId,
+                new SendMessageRequest(Guid.NewGuid(), $"concurrent-{index:D2}"))));
+
+    Check(
+        concurrentSends.Count(result => result.Created) == 20,
+        "concurrent unique sends all persist exactly once");
+
+    var concurrentHistory = await chat.GetDirectHistoryAsync(
+        carol,
+        ac.ConversationId,
+        null,
+        100);
+
+    Check(
+        concurrentHistory.Count == 20,
+        "concurrent unique sends remain fully readable");
+
     var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
     await reopened.InitializeAsync();
     var reopenedChat = new ChatStore(reopened);
