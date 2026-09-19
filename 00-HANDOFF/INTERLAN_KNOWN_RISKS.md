@@ -85,7 +85,11 @@ Platform secure-storage policy remains open for final native acceptance.
 
 ## R14 — Migration matrix regression
 
+**SOURCE COVERAGE STRENGTHENED — EXECUTABLE VERIFICATION PENDING**
+
 P3 adds migration `008_p3_group_authority.sql`. Historical upgrades must remain data-preserving, not just schema-creating.
+
+The migration check now seeds a migration-007 database with P2 direct conversation memberships, a message, receipt state, conversation preference, device credential metadata, and an existing group membership, then requires every seeded value to remain present after migration 008. The executable migration gate is still NOT RUN in this environment.
 
 ## R15 — Group ownership policy boundary
 
@@ -95,7 +99,19 @@ Current P3 keeps creator OWNER immutable through ordinary remove/role mutation. 
 
 Current contract authorizes current active members to read group history. No "history only since join" rule exists. Do not invent one silently.
 
-## R17 — Governance drift
+## R17 — Group IDOR / audit evidence
+
+**SOURCE HARDENED — EXECUTABLE VERIFICATION PENDING**
+
+Current P3 source checks cover:
+- true non-member denial for group detail/history/message/receipt/event/send surfaces;
+- cross-group message IDs rejected for detail, receipts, edit, delete, reply, forward cursor, and recent cursor;
+- HTTP 403/404 route isolation for representative non-member and cross-group message cases;
+- membership audit payloads that identify the target user directly.
+
+The core/realtime executable gates remain NOT RUN here.
+
+## R18 — Governance drift
 
 **CORRECTED IN PRODUCT-REPO STRUCTURE; CONTINUITY MUST STAY CURRENT**
 

@@ -16,7 +16,7 @@ No fake commits. No whitespace farming. No empty commits.
 
 | Phase | Target | Observed baseline | Status |
 | --- | ---: | ---: | --- |
-| P3 | 300+ meaningful | 91 commits ahead of accepted main at code anchor `ea5729ada72064d3770cb4da64d56c539227eda8` | ACTIVE |
+| P3 | 300+ meaningful | 97 commits ahead of accepted main at code anchor `a90f315f9c3c831b3cd6cf50e7dc84fe1a80ff30` | ACTIVE |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
 | P6 | 300+ | 0 | not started |
@@ -78,5 +78,10 @@ Source anchors:
 - `28b5c21a4a2668309d292cf01dd7f69af8df3b78` — close read cursors before snapshot commit
 - `6b4947a64109f5471c51618a92939bef49483bfd` — revocation-raced read snapshot regression
 - `ea5729ada72064d3770cb4da64d56c539227eda8` — derive restart history expectation from valid race outcome
+- `c3f98a6730507efca8c2b25b5803b1aa2332fa48` — close store-level non-member and cross-group message IDOR matrix
+- `e94a7fe5d8453886a58e83cea1aee5c97ef9d911` — preserve real P2 state through migration 008 fixture
+- `233d4f0e3d4835f53dd7c187e4cc1d70b8181b5f` — prove HTTP non-member and cross-group IDOR isolation
+- `677a37e53d732715041676a8dbd8b4df42861931` — identify membership targets in audit/event payloads
+- `a90f315f9c3c831b3cd6cf50e7dc84fe1a80ff30` — prove membership audit target durability
 
 Evidence: SOURCE INSPECTED ONLY. Executable gates NOT RUN in this environment.

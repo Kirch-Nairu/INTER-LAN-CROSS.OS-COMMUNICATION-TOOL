@@ -24,10 +24,10 @@ Governance correction is forward-only; exact current HEAD must be read from Git.
 
 ## Current code anchor
 
-`ea5729ada72064d3770cb4da64d56c539227eda8`
+`a90f315f9c3c831b3cd6cf50e7dc84fe1a80ff30`
 
 Observed against `main@d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`:
-- ahead: 91 commits
+- ahead: 97 commits
 - behind: 0
 
 ## What changed before this handoff
@@ -52,6 +52,10 @@ P3 source already includes:
 - authorized group directory/detail/history/message/receipt/event/typing-target reads now use one SQLite read snapshot, preventing a user removed between authorization and later SELECTs from observing post-removal data.
 - concurrency coverage now includes remove-vs-metadata response linearization and revocation-raced reads that must never observe messages committed after removal.
 - restart history expectations now derive from the valid remove-vs-send race outcome rather than assuming one serialization order.
+- core IDOR coverage now rejects non-member group reads/sends and cross-group message IDs across detail, receipts, edit, delete, reply, and both cursor directions.
+- HTTP realtime smoke now exercises non-member and cross-group route isolation with explicit 403/404 expectations.
+- migration proof now seeds a real pre-P3 migration-007 dataset (conversation, memberships, message, receipt, preference, device credential metadata, and existing group membership) and requires it to survive migration 008.
+- membership audit/event payloads now include the target user ID, and the core check proves the generic audit ledger is self-identifying.
 
 A mistaken governance wave copied Forge-style `.forge/` state into the product repo while referencing the wrong repository. That structure was removed forward-only and replaced with the actual Operation-FORGE.kirion rapid-product instruction layer.
 

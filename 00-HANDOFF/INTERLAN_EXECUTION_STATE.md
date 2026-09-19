@@ -81,10 +81,10 @@ Implemented source surfaces include:
 
 ## Latest P3 authority-race wave
 
-Code anchor: `ea5729ada72064d3770cb4da64d56c539227eda8`
+Code anchor: `a90f315f9c3c831b3cd6cf50e7dc84fe1a80ff30`
 
 Observed branch relationship at that anchor:
-- ahead of main: 91 commits
+- ahead of main: 97 commits
 - behind main: 0
 
 Implemented in source:
@@ -97,7 +97,11 @@ Implemented in source:
 - group create/update response snapshots inside the mutation transaction, removing post-commit actor reauthorization;
 - authorized group read snapshots across directory/details/history/messages/receipts/events/typing target projection;
 - remove-vs-metadata and revocation-raced read regression coverage;
-- restart persistence count derived from the actual valid remove-vs-send serialization outcome.
+- restart persistence count derived from the actual valid remove-vs-send serialization outcome;
+- store-level non-member and cross-group message IDOR matrix across group detail/history/messages/receipts/events/edit/delete/cursors;
+- HTTP-level non-member and cross-group route isolation proof;
+- migration-007 fixture with real P2 conversation/message/receipt/preference/device/group data required to survive migration 008;
+- membership audit payloads include target user IDs and are asserted by the core suite.
 
 Static brace/call-pattern inspection of touched P3 files: SOURCE INSPECTED ONLY.
 
