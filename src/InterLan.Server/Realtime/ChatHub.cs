@@ -12,6 +12,7 @@ public sealed class ChatHub(
 {
     private const string LeaseKey = "interlan-realtime-lease";
 
+    public const string AuthenticatedGroup = "authenticated";
     public static string UserGroup(Guid userId) => $"user:{userId:D}";
 
     public override async Task OnConnectedAsync()
@@ -30,7 +31,25 @@ public sealed class ChatHub(
             Context.ConnectionId,
             Context.Abort);
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, UserGroup(principal.UserId));
+        await Groups.AddToGroupAsync(
+            Context.ConnectionId,
+            UserGroup(principal.UserId));
+        await Groups.AddToGroupAsync(
+            Context.ConnectionId,
+            AuthenticatedGroup);
+
+        await Clients.GroupExcept(
+                AuthenticatedGroup,
+                new[] { Context.ConnectionId })
+            .SendAsync(
+                "PresenceChanged",
+                new UserPresenceResponse(
+                    principal.UserId,
+                    IsOnline: true,
+                    connections.GetUserConnectionCount(principal.UserId),
+                    DateTimeOffset.UtcNow),
+                Context.ConnectionAborted);
+
         await base.OnConnectedAsync();
     }
 
