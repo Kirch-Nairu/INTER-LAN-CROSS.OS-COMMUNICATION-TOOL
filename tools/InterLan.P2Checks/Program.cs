@@ -375,6 +375,27 @@ try
         afterDuplicateRace.Count == 22,
         "concurrent duplicate race adds exactly one message");
 
+    var recentPage = await chat.GetDirectRecentHistoryPageAsync(
+        carol,
+        ac.ConversationId,
+        null,
+        5);
+
+    var olderPage = await chat.GetDirectRecentHistoryPageAsync(
+        carol,
+        ac.ConversationId,
+        recentPage.OlderBeforeMessageId,
+        5);
+
+    Check(
+        recentPage.Items.Count == 5 &&
+        recentPage.HasOlder &&
+        olderPage.Items.Count == 5 &&
+        !recentPage.Items.Select(message => message.MessageId)
+            .Intersect(olderPage.Items.Select(message => message.MessageId))
+            .Any(),
+        "recent-history pages walk backward without overlap");
+
     var carolUnreadBeforeAdvance =
         (await chat.ListDirectConversationSummariesAsync(carol))
         .Single(summary => summary.ConversationId == ac.ConversationId);
