@@ -17,23 +17,8 @@ static int ReservePort()
     return ((IPEndPoint)listener.LocalEndpoint).Port;
 }
 
-static HttpClient CreateHttpClient()
-{
-    var handler = new SocketsHttpHandler
-    {
-        UseProxy = false,
-        ConnectTimeout = TimeSpan.FromSeconds(2),
-        SslOptions = new SslClientAuthenticationOptions
-        {
-            RemoteCertificateValidationCallback = (_, _, _, _) => true
-        }
-    };
-
-    return new HttpClient(handler)
-    {
-        Timeout = TimeSpan.FromSeconds(5)
-    };
-}
+static HttpClient CreateHttpClient() =>
+    TestHttpClientFactory.CreateLoopback();
 
 static HubConnection CreateHub(Uri baseUri, string token)
 {
