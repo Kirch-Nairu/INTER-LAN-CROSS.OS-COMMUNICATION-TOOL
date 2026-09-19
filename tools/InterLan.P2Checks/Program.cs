@@ -342,6 +342,15 @@ try
         string.IsNullOrEmpty(afterDelete[0].Body),
         "soft-deleted direct message remains as a redacted history tombstone");
 
+    var mutableDetail = await chat.GetDirectMessageByIdAsync(
+        alice,
+        ac.ConversationId,
+        mutable.Message.MessageId);
+
+    Check(
+        mutableDetail.MessageId == mutable.Message.MessageId,
+        "authorized direct-message detail resolves durable message");
+
     var concurrentSends = await Task.WhenAll(
         Enumerable.Range(0, 20)
             .Select(index => chat.SendDirectMessageAsync(
