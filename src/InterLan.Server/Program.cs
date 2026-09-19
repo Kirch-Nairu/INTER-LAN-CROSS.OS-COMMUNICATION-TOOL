@@ -19,24 +19,34 @@ if (string.IsNullOrWhiteSpace(dataDirectory))
     dataDirectory = Path.Combine(AppContext.BaseDirectory, "data");
 }
 
-var certificate = ServerCertificateManager.LoadOrCreate(dataDirectory);
-var port = builder.Configuration.GetValue("InterLan:Server:Port", 7443);
-var bindAddressText = builder.Configuration.GetValue<string>("InterLan:Server:BindAddress") ?? "0.0.0.0";
-
-if (!IPAddress.TryParse(bindAddressText, out var bindAddress))
-{
-    throw new InvalidOperationException($"InterLan:Server:BindAddress must be an IP address. Received: {bindAddressText}");
-}
-
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.Listen(bindAddress, port, listen => listen.UseHttps(certificate.Certificate));
-});
+dataDirectory = Path.GetFullPath(dataDirectory);
 
 var database = new SqliteDatabase(Path.Combine(dataDirectory, "interlan.db"));
 await database.InitializeAsync();
 
+var persistedSettings = await new ServerSettingsStore(database)
+    .LoadAsync(dataDirectory);
+var runtimeSettings = ServerRuntimeSettingsResolver.ApplyExplicitOverrides(
+    persistedSettings,
+    builder.Configuration);
+
+if (!IPAddress.TryParse(runtimeSettings.BindAddress, out var bindAddress))
+{
+    throw new InvalidOperationException(
+        $"Resolved server bind address is invalid: {runtimeSettings.BindAddress}");
+}
+
+var certificate = ServerCertificateManager.LoadOrCreate(dataDirectory);
+var port = runtimeSettings.Port;
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Listen(bindAddress, runtimeSettings.Port, listen => listen.UseHttps(certificate.Certificate));
+});
+
 builder.Services.AddSingleton(database);
+builder.Services.AddSingleton(runtimeSettings);
+builder.Services.AddSingleton<ServerSettingsStore>();
 builder.Services.AddSingleton(certificate);
 builder.Services.AddSingleton<IServerIdentityStore, SqliteServerIdentityStore>();
 builder.Services.AddSingleton<EnrollmentStore>();
