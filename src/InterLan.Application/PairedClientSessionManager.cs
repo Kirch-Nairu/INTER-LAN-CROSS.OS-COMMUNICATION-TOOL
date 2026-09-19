@@ -21,6 +21,9 @@ public sealed class PairedClientConnection(
         return client;
     }
 
+    public InterLanRealtimeClient CreateRealtimeClient() =>
+        new(PairingState, Session.BearerToken);
+
     public void Dispose() => HttpClient.Dispose();
 }
 
