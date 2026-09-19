@@ -510,8 +510,11 @@ try
         afterMessageId: null,
         limit: 250);
 
+    var expectedRestartedHistoryCount =
+        182 + (removeVsSend[0] == "SUCCESS" ? 1 : 0);
+
     Check(
-        restartedHistory.Count == 182,
+        restartedHistory.Count == expectedRestartedHistoryCount,
         "concurrent group workload survives database reopen");
 
     var restartedDetails = await reopenedGroups.GetGroupDetailsAsync(
