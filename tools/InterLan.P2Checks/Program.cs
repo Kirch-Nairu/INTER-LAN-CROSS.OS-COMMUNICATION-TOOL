@@ -30,6 +30,20 @@ try
     var database = new SqliteDatabase(Path.Combine(root, "p2.db"));
     await database.InitializeAsync();
 
+    await using (var connection = database.OpenConnection())
+    {
+        await using var journal = connection.CreateCommand();
+        journal.CommandText = "PRAGMA journal_mode;";
+        var journalMode = Convert.ToString(await journal.ExecuteScalarAsync());
+        Check(string.Equals(journalMode, "wal", StringComparison.OrdinalIgnoreCase),
+            "SQLite uses WAL journal mode");
+
+        await using var timeout = connection.CreateCommand();
+        timeout.CommandText = "PRAGMA busy_timeout;";
+        var busyTimeout = Convert.ToInt32(await timeout.ExecuteScalarAsync());
+        Check(busyTimeout >= 5000, "SQLite connection enforces busy timeout");
+    }
+
     var alice = Guid.NewGuid();
     var bob = Guid.NewGuid();
     var carol = Guid.NewGuid();
