@@ -40,6 +40,42 @@ public static class SystemEndpointMappings
             });
         });
 
+        endpoints.MapGet("/api/v1/server/settings", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            ServerRuntimeSettings activeSettings,
+            ServerSettingsStore settingsStore,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await AuthorizationHelpers.RequireOwnerAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                var persisted = await settingsStore.LoadPersistedAsync(cancellationToken)
+                    ?? activeSettings;
+
+                return Results.Ok(new ServerSettingsSnapshotResponse(
+                    ToResponse(activeSettings),
+                    ToResponse(persisted),
+                    activeSettings != persisted));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+
         return endpoints;
     }
+
+    private static ServerSettingsResponse ToResponse(ServerRuntimeSettings settings) =>
+        new(
+            settings.BindAddress,
+            settings.Port,
+            settings.DiscoveryEnabled,
+            settings.ClientApprovalRequired,
+            settings.StoragePath);
 }
