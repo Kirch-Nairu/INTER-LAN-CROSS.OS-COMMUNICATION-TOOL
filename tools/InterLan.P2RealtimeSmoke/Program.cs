@@ -569,6 +569,46 @@ var baseUri = server.BaseUri;
     }
 
     Console.WriteLine("PASS authenticated message partition enforces bounded saturation");
+
+    using var secondOwnerHttp = CreateHttpClient();
+    secondOwnerHttp.BaseAddress = baseUri;
+
+    using var secondOwnerLogin = await secondOwnerHttp.PostAsJsonAsync(
+        "/api/v1/auth/owner/login",
+        new
+        {
+            username = "owner",
+            password = "p2-realtime-owner-password"
+        });
+
+    if (!secondOwnerLogin.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine("FAIL second owner session login");
+        return 1;
+    }
+
+    var secondOwnerSession =
+        await secondOwnerLogin.Content.ReadFromJsonAsync<JsonElement>();
+    Bearer(
+        secondOwnerHttp,
+        secondOwnerSession.GetProperty("bearerToken").GetString()!);
+
+    using var isolatedSend = await secondOwnerHttp.PostAsJsonAsync(
+        $"/api/v1/direct/{conversationId:D}/messages",
+        new
+        {
+            clientMessageId = Guid.NewGuid(),
+            body = "isolated-session-after-rate-limit"
+        });
+
+    if (!isolatedSend.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine(
+            $"FAIL distinct session inherited another session limiter state: {(int)isolatedSend.StatusCode}");
+        return 1;
+    }
+
+    Console.WriteLine("PASS distinct authenticated session has isolated message limiter budget");
     Console.WriteLine("INTER-LAN P2 REALTIME SMOKE: PASS");
     return 0;
 }
