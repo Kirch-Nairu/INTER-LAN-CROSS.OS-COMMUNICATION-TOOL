@@ -67,6 +67,32 @@ public static class EnrollmentEndpointMappings
             }
         }).RequireRateLimiting("auth");
         
+        app.MapGet("/api/v1/auth/device/current", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                if (principal.DeviceId is not { } deviceId)
+                    return Results.Conflict(new { error = "Current session is not device-bound." });
+
+                return Results.Ok(await enrollment.GetCurrentDeviceSecurityAsync(
+                    principal.UserId,
+                    deviceId,
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+
         app.MapGet("/api/v1/auth/sessions", async (
             HttpContext context,
             EnrollmentStore enrollment,
