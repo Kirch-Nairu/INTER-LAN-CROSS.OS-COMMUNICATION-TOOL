@@ -421,6 +421,37 @@ public static class MessagingEndpointMappings
             }
         }).RequireRateLimiting("message");
         
+        app.MapGet("/api/v1/direct/search", async (
+            string q,
+            int? limit,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            ChatStore chat,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                return Results.Ok(await chat.SearchAllDirectMessagesAsync(
+                    principal.UserId,
+                    q,
+                    Math.Clamp(limit ?? 50, 1, 100),
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
         app.MapGet("/api/v1/direct/{conversationId:guid}/search", async (
             Guid conversationId,
             string q,
