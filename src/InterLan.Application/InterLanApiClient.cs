@@ -598,6 +598,42 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Group role mutation response was empty.");
     }
 
+    public async Task<MessageResponse> SendGroupMessageAsync(
+        Guid groupId,
+        SendMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            $"/api/v1/groups/{groupId:D}/messages",
+            request,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Group message response was empty.");
+    }
+
+    public async Task<MessagePageResponse> GetGroupHistoryPageAsync(
+        Guid groupId,
+        Guid? afterMessageId = null,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        var path = $"/api/v1/groups/{groupId:D}/messages?limit={limit}";
+        if (afterMessageId is { } cursor)
+            path += $"&afterMessageId={cursor:D}";
+
+        return await _httpClient.GetFromJsonAsync<MessagePageResponse>(
+            path,
+            cancellationToken)
+            ?? throw new InvalidDataException("Group message page response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
