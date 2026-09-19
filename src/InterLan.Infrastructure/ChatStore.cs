@@ -712,6 +712,26 @@ public sealed class ChatStore(SqliteDatabase database)
             readUtc);
     }
 
+    public async Task<Guid> GetDirectConversationIdForMessageAsync(
+        Guid actorUserId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        var target = await GetDirectReceiptTargetAsync(
+            connection,
+            messageId,
+            cancellationToken);
+
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            target.ConversationId,
+            cancellationToken);
+
+        return target.ConversationId;
+    }
+
     public async Task MarkDeliveredAsync(
         Guid actorUserId,
         Guid messageId,
