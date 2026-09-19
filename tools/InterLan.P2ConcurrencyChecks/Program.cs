@@ -104,6 +104,29 @@ try
     Check(
         aliceMessages.Length == 100,
         "one hundred concurrent receipt writes complete without database lock loss");
+
+    var mixedWrites = Task.WhenAll(
+        Enumerable.Range(0, 40)
+            .Select(index => chat.SendDirectMessageAsync(
+                alice,
+                conversation.ConversationId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    $"mixed-{index:D2}"))));
+
+    var mixedReads = Task.WhenAll(
+        uniqueHistory
+            .Where(message => message.SenderUserId == bob)
+            .Take(40)
+            .Select(message => chat.MarkReadAsync(
+                alice,
+                message.MessageId)));
+
+    await Task.WhenAll(mixedWrites, mixedReads);
+
+    Check(
+        mixedWrites.Result.All(write => write.Created),
+        "mixed message and receipt workloads complete concurrently");
 }
 finally
 {
