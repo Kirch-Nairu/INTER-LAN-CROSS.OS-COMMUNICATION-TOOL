@@ -326,6 +326,7 @@ public sealed class ChatStore(SqliteDatabase database)
         }
 
         return summaries
+            .Where(summary => includeArchived || !summary.IsArchived)
             .OrderBy(summary => summary.IsArchived)
             .ThenByDescending(summary => summary.IsPinned)
             .ThenByDescending(summary =>
