@@ -33,6 +33,35 @@ public static class MessagingEndpointMappings
             }
         }).RequireRateLimiting("auth");
         
+        app.MapGet("/api/v1/presence", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            RealtimeConnectionRegistry connections,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                var observedUtc = DateTimeOffset.UtcNow;
+                return Results.Ok(
+                    connections.GetOnlineUserIds()
+                        .Select(userId => new UserPresenceResponse(
+                            userId,
+                            IsOnline: true,
+                            connections.GetUserConnectionCount(userId),
+                            observedUtc))
+                        .ToArray());
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+
         app.MapGet("/api/v1/users", async (
             HttpContext context,
             EnrollmentStore enrollment,
