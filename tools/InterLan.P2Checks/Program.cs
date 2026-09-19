@@ -273,8 +273,11 @@ try
         100);
 
     Check(
-        afterDelete.Count == 0,
-        "soft-deleted direct message is excluded from active history");
+        afterDelete.Count == 1 &&
+        afterDelete[0].MessageId == mutable.Message.MessageId &&
+        afterDelete[0].DeletedUtc is not null &&
+        string.IsNullOrEmpty(afterDelete[0].Body),
+        "soft-deleted direct message remains as a redacted history tombstone");
 
     var concurrentSends = await Task.WhenAll(
         Enumerable.Range(0, 20)
@@ -294,7 +297,7 @@ try
         100);
 
     Check(
-        concurrentHistory.Count == 20,
+        concurrentHistory.Count == 21,
         "concurrent unique sends remain fully readable");
 
     var firstPage = await chat.GetDirectHistoryPageAsync(
@@ -347,7 +350,7 @@ try
         100);
 
     Check(
-        afterDuplicateRace.Count == 21,
+        afterDuplicateRace.Count == 22,
         "concurrent duplicate race adds exactly one message");
 
     var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
