@@ -11,6 +11,9 @@ var checks = new[]
     ("P2 CORE", "tools/InterLan.P2Checks/InterLan.P2Checks.csproj"),
     ("P2 REALTIME", "tools/InterLan.P2RealtimeSmoke/InterLan.P2RealtimeSmoke.csproj"),
     ("P2 CONCURRENCY", "tools/InterLan.P2ConcurrencyChecks/InterLan.P2ConcurrencyChecks.csproj"),
+    ("P3 CORE", "tools/InterLan.P3Checks/InterLan.P3Checks.csproj"),
+    ("P3 REALTIME", "tools/InterLan.P3RealtimeSmoke/InterLan.P3RealtimeSmoke.csproj"),
+    ("P3 CONCURRENCY", "tools/InterLan.P3ConcurrencyChecks/InterLan.P3ConcurrencyChecks.csproj"),
     ("MIGRATIONS", "tools/InterLan.MigrationChecks/InterLan.MigrationChecks.csproj"),
     ("DESKTOP OWNER HOST", "tools/InterLan.DesktopChecks/InterLan.DesktopChecks.csproj")
 };
@@ -70,5 +73,5 @@ foreach (var (name, relativeProject) in checks)
 }
 
 Console.WriteLine();
-Console.WriteLine("INTER-LAN P0-P2 AGGREGATE SUITE: PASS");
+Console.WriteLine("INTER-LAN P0-P3 AGGREGATE SUITE: PASS");
 return 0;
