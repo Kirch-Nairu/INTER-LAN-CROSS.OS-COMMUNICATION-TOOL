@@ -587,12 +587,23 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         command.Parameters.AddWithValue("$expires", expires.ToString("O"));
         await command.ExecuteNonQueryAsync(cancellationToken);
 
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            userId,
+            "SESSION_CREATED",
+            "SESSION",
+            sessionId,
+            "{}",
+            now,
+            cancellationToken);
+
         return new SessionResponse(sessionId, userId, deviceId, role, token, expires);
     }
 
     private static async Task AppendAuditAsync(
         SqliteConnection connection,
-        SqliteTransaction transaction,
+        SqliteTransaction? transaction,
         Guid? actor,
         string eventType,
         string subjectType,
