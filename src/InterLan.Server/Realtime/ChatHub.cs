@@ -8,6 +8,7 @@ namespace InterLan.Server.Realtime;
 public sealed class ChatHub(
     EnrollmentStore enrollment,
     ChatStore chat,
+    GroupStore groups,
     RealtimeConnectionRegistry connections,
     RealtimeTicketStore tickets) : Hub
 {
@@ -119,6 +120,45 @@ public sealed class ChatHub(
             await Clients.Group(UserGroup(memberId))
                 .SendAsync(
                     "TypingChanged",
+                    payload,
+                    Context.ConnectionAborted);
+        }
+    }
+
+    public async Task SetGroupTyping(
+        Guid groupId,
+        bool isTyping)
+    {
+        if (!Context.Items.TryGetValue("principal", out var value) ||
+            value is not SessionPrincipal principal)
+        {
+            throw new HubException("Authenticated session is required.");
+        }
+
+        IReadOnlyList<Guid> memberIds;
+        try
+        {
+            memberIds = await groups.GetActiveGroupMemberIdsAsync(
+                principal.UserId,
+                groupId,
+                Context.ConnectionAborted);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new HubException("Active group membership is required.");
+        }
+
+        var payload = new GroupTypingIndicatorResponse(
+            groupId,
+            principal.UserId,
+            isTyping,
+            DateTimeOffset.UtcNow);
+
+        foreach (var memberId in memberIds.Where(id => id != principal.UserId))
+        {
+            await Clients.Group(UserGroup(memberId))
+                .SendAsync(
+                    "GroupTypingChanged",
                     payload,
                     Context.ConnectionAborted);
         }
