@@ -143,7 +143,7 @@ try
         await groups.UpdateGroupAsync(
             ownerId,
             group.GroupId,
-            new UpdateGroupRequest("P3 Concurrency"));
+            new UpdateGroupRequest("P3 Concurrency", null));
     }
 
     Check(
