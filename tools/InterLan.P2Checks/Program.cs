@@ -14,6 +14,17 @@ Check(
     RateLimitPartitionKeys.RemoteAddress(rateContextB),
     "rate-limit IP partitions isolate distinct clients");
 
+var authRateContextA = new DefaultHttpContext();
+authRateContextA.Request.Headers.Authorization = "Bearer p2-rate-limit-token-a";
+var authRateContextAReplay = new DefaultHttpContext();
+authRateContextAReplay.Request.Headers.Authorization = "Bearer p2-rate-limit-token-a";
+
+var authPartition = RateLimitPartitionKeys.AuthenticatedClient(authRateContextA);
+Check(
+    authPartition == RateLimitPartitionKeys.AuthenticatedClient(authRateContextAReplay) &&
+    !authPartition.Contains("p2-rate-limit-token-a", StringComparison.Ordinal),
+    "authenticated rate-limit partition is stable without exposing bearer token");
+
 var failures = new List<string>();
 
 void Check(bool condition, string name)
