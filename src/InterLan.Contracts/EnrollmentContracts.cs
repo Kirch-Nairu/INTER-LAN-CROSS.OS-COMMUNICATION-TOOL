@@ -54,3 +54,22 @@ public sealed record JoinDecisionResponse(
 public sealed record ExchangeJoinRequest(
     Guid RequestId,
     string EnrollmentSecret);
+
+public sealed record PendingJoinRequestResponse(
+    Guid RequestId,
+    string Username,
+    string DisplayName,
+    string DeviceName,
+    string Platform,
+    DateTimeOffset CreatedUtc);
+
+public sealed record DeviceSummaryResponse(
+    Guid DeviceId,
+    Guid UserId,
+    string Username,
+    string DisplayName,
+    string DeviceName,
+    string Platform,
+    DateTimeOffset? ApprovedUtc,
+    DateTimeOffset? RevokedUtc,
+    DateTimeOffset? LastSeenUtc);
