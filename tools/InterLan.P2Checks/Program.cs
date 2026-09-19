@@ -245,6 +245,37 @@ try
         edited.EditedUtc is not null,
         "sender can edit active direct message");
 
+    Check(await ThrowsAsync<UnauthorizedAccessException>(() =>
+        chat.DeleteDirectMessageAsync(
+            carol,
+            ac.ConversationId,
+            mutable.Message.MessageId)),
+        "direct-message recipient cannot delete sender content");
+
+    var deleted = await chat.DeleteDirectMessageAsync(
+        alice,
+        ac.ConversationId,
+        mutable.Message.MessageId);
+
+    var deletedAgain = await chat.DeleteDirectMessageAsync(
+        alice,
+        ac.ConversationId,
+        mutable.Message.MessageId);
+
+    Check(
+        deleted.DeletedUtc == deletedAgain.DeletedUtc,
+        "sender direct-message delete is idempotent");
+
+    var afterDelete = await chat.GetDirectHistoryAsync(
+        carol,
+        ac.ConversationId,
+        null,
+        100);
+
+    Check(
+        afterDelete.Count == 0,
+        "soft-deleted direct message is excluded from active history");
+
     var concurrentSends = await Task.WhenAll(
         Enumerable.Range(0, 20)
             .Select(index => chat.SendDirectMessageAsync(
