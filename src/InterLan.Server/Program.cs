@@ -278,6 +278,7 @@ app.MapPost("/api/v1/join/{requestId:guid}/decision", async (
             owner.UserId,
             requestId,
             request.Approve,
+            request.ExistingUserId,
             cancellationToken));
     }
     catch (UnauthorizedAccessException)
