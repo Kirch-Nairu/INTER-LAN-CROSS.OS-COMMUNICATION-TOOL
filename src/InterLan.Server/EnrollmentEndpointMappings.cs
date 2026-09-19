@@ -67,6 +67,29 @@ public static class EnrollmentEndpointMappings
             }
         }).RequireRateLimiting("auth");
         
+        app.MapGet("/api/v1/auth/sessions", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                return Results.Ok(await enrollment.ListOwnSessionsAsync(
+                    principal.UserId,
+                    principal.SessionId,
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+        
         app.MapPost("/api/v1/auth/logout", async (
             HttpContext context,
             EnrollmentStore enrollment,
