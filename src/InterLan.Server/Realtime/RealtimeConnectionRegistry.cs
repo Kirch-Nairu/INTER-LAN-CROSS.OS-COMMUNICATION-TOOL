@@ -7,6 +7,7 @@ public sealed class RealtimeConnectionRegistry
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, Action>> _sessions = new();
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, Action>> _devices = new();
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, Action>> _users = new();
 
     public IDisposable Register(
         SessionPrincipal principal,
@@ -18,10 +19,16 @@ public sealed class RealtimeConnectionRegistry
         ArgumentNullException.ThrowIfNull(abort);
 
         Add(_sessions, principal.SessionId, connectionId, abort);
+        Add(_users, principal.UserId, connectionId, abort);
         if (principal.DeviceId is { } deviceId)
             Add(_devices, deviceId, connectionId, abort);
 
-        return new Lease(this, principal.SessionId, principal.DeviceId, connectionId);
+        return new Lease(
+            this,
+            principal.UserId,
+            principal.SessionId,
+            principal.DeviceId,
+            connectionId);
     }
 
     public int RevokeSession(Guid sessionId) =>
@@ -29,6 +36,19 @@ public sealed class RealtimeConnectionRegistry
 
     public int RevokeDevice(Guid deviceId) =>
         Revoke(_devices, deviceId);
+
+    public bool IsUserOnline(Guid userId) =>
+        _users.TryGetValue(userId, out var bucket) && !bucket.IsEmpty;
+
+    public int GetUserConnectionCount(Guid userId) =>
+        _users.TryGetValue(userId, out var bucket) ? bucket.Count : 0;
+
+    public IReadOnlyList<Guid> GetOnlineUserIds() =>
+        _users
+            .Where(pair => !pair.Value.IsEmpty)
+            .Select(pair => pair.Key)
+            .OrderBy(id => id)
+            .ToArray();
 
     private static void Add(
         ConcurrentDictionary<Guid, ConcurrentDictionary<string, Action>> index,
@@ -65,8 +85,13 @@ public sealed class RealtimeConnectionRegistry
         return aborted;
     }
 
-    private void Unregister(Guid sessionId, Guid? deviceId, string connectionId)
+    private void Unregister(
+        Guid userId,
+        Guid sessionId,
+        Guid? deviceId,
+        string connectionId)
     {
+        Remove(_users, userId, connectionId);
         Remove(_sessions, sessionId, connectionId);
         if (deviceId is { } id)
             Remove(_devices, id, connectionId);
@@ -87,6 +112,7 @@ public sealed class RealtimeConnectionRegistry
 
     private sealed class Lease(
         RealtimeConnectionRegistry owner,
+        Guid userId,
         Guid sessionId,
         Guid? deviceId,
         string connectionId) : IDisposable
@@ -98,7 +124,7 @@ public sealed class RealtimeConnectionRegistry
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
 
-            owner.Unregister(sessionId, deviceId, connectionId);
+            owner.Unregister(userId, sessionId, deviceId, connectionId);
         }
     }
 }
