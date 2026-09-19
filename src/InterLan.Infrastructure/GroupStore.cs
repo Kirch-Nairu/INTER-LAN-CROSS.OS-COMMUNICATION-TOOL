@@ -763,6 +763,112 @@ public sealed class GroupStore(SqliteDatabase database)
             true);
     }
 
+    public async Task<IReadOnlyList<MessageResponse>> GetGroupHistoryAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid? afterMessageId,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit is < 1 or > 250)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var connection = database.OpenConnection();
+        await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken);
+
+        string? afterCreatedUtc = null;
+        string? afterId = null;
+
+        if (afterMessageId is { } cursor)
+        {
+            await using var cursorCommand = connection.CreateCommand();
+            cursorCommand.CommandText =
+                """
+                SELECT created_utc, message_id
+                FROM messages
+                WHERE message_id = $messageId
+                  AND scope_type = 'GROUP'
+                  AND scope_id = $groupId;
+                """;
+            cursorCommand.Parameters.AddWithValue("$messageId", cursor.ToString("D"));
+            cursorCommand.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+            await using var cursorReader =
+                await cursorCommand.ExecuteReaderAsync(cancellationToken);
+            if (!await cursorReader.ReadAsync(cancellationToken))
+                throw new KeyNotFoundException(
+                    "Message cursor was not found in this group.");
+
+            afterCreatedUtc = cursorReader.GetString(0);
+            afterId = cursorReader.GetString(1);
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT message_id, scope_type, scope_id, sender_user_id,
+                   client_message_id, body, reply_to_message_id, created_utc,
+                   edited_utc, deleted_utc
+            FROM messages
+            WHERE scope_type = 'GROUP'
+              AND scope_id = $groupId
+              AND (
+                  $afterCreatedUtc IS NULL
+                  OR created_utc > $afterCreatedUtc
+                  OR (created_utc = $afterCreatedUtc AND message_id > $afterId)
+              )
+            ORDER BY created_utc, message_id
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$afterCreatedUtc",
+            afterCreatedUtc is null ? DBNull.Value : afterCreatedUtc);
+        command.Parameters.AddWithValue(
+            "$afterId",
+            afterId is null ? DBNull.Value : afterId);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var messages = new List<MessageResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            messages.Add(ReadMessage(reader));
+
+        return messages;
+    }
+
+    public async Task<MessagePageResponse> GetGroupHistoryPageAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid? afterMessageId,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit is < 1 or > MaxMessagePageSize)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        var items = await GetGroupHistoryAsync(
+            actorUserId,
+            groupId,
+            afterMessageId,
+            limit + 1,
+            cancellationToken);
+
+        var hasMore = items.Count > limit;
+        var pageItems = hasMore
+            ? items.Take(limit).ToArray()
+            : items.ToArray();
+
+        return new MessagePageResponse(
+            pageItems,
+            pageItems.Length == 0 ? null : pageItems[^1].MessageId,
+            hasMore);
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
