@@ -40,6 +40,45 @@ public static class SystemEndpointMappings
             });
         });
 
+        endpoints.MapPut("/api/v1/server/settings", async (
+            HttpContext context,
+            UpdateServerSettingsRequest request,
+            EnrollmentStore enrollment,
+            ServerRuntimeSettings activeSettings,
+            ServerSettingsStore settingsStore,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await AuthorizationHelpers.RequireOwnerAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                var persisted = new ServerRuntimeSettings(
+                    request.BindAddress,
+                    request.Port,
+                    request.DiscoveryEnabled,
+                    request.ClientApprovalRequired,
+                    Path.GetFullPath(request.StoragePath));
+
+                await settingsStore.SaveAsync(persisted, cancellationToken);
+
+                return Results.Ok(new ServerSettingsSnapshotResponse(
+                    ToResponse(activeSettings),
+                    ToResponse(persisted),
+                    activeSettings != persisted));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        });
+
         endpoints.MapGet("/api/v1/server/settings", async (
             HttpContext context,
             EnrollmentStore enrollment,
