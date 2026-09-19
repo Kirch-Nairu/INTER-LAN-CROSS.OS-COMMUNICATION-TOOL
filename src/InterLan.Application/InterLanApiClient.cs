@@ -221,6 +221,25 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Server settings response was empty.");
     }
 
+    public async Task<ConversationReadResponse> MarkDirectConversationReadAsync(
+        Guid conversationId,
+        Guid? upToMessageId = null,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            $"/api/v1/direct/{conversationId:D}/read",
+            new MarkConversationReadRequest(upToMessageId),
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ConversationReadResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Conversation read response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
