@@ -440,6 +440,34 @@ var baseUri = server.BaseUri;
 
     Console.WriteLine("PASS direct-message edit broadcasts durable realtime mutation");
 
+    var deletedEvent = new TaskCompletionSource<JsonElement>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+
+    mutationHub.On<JsonElement>("MessageDeleted", message =>
+    {
+        deletedEvent.TrySetResult(message);
+    });
+
+    using var deleteResponse = await ownerHttp.DeleteAsync(
+        $"/api/v1/direct/{conversationId:D}/messages/{mutableMessageId:D}");
+
+    if (!deleteResponse.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine(
+            $"FAIL realtime message delete {(int)deleteResponse.StatusCode}: {await deleteResponse.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    var deletedRealtime = await deletedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    if (deletedRealtime.GetProperty("messageId").GetGuid() != mutableMessageId)
+    {
+        Console.Error.WriteLine("FAIL realtime delete event payload mismatch");
+        return 1;
+    }
+
+    await mutationHub.StopAsync();
+    Console.WriteLine("PASS direct-message delete broadcasts realtime tombstone event");
+
     await using var revokedHub = CreateHub(baseUri, memberToken);
     var revokedHubClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
     revokedHub.Closed += _ =>
