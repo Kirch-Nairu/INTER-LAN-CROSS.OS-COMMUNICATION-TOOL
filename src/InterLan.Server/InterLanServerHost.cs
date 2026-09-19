@@ -84,6 +84,7 @@ public static class InterLanServerHost
         builder.Services.AddSingleton<EnrollmentStore>();
         builder.Services.AddSingleton<ChatStore>();
         builder.Services.AddSingleton<RealtimeConnectionRegistry>();
+        builder.Services.AddSingleton<RealtimeTicketStore>();
         builder.Services.AddHostedService<LanDiscoveryBroadcaster>();
         builder.Services.AddSignalR();
         builder.Services.AddProblemDetails();
