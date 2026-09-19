@@ -80,6 +80,16 @@ try
     var ab2 = await chat.GetOrCreateDirectConversationAsync(bob, alice);
     Check(ab1.ConversationId == ab2.ConversationId, "same user pair resolves to one canonical direct conversation");
 
+    var concurrentConversationIds = await Task.WhenAll(
+        Enumerable.Range(0, 16)
+            .Select(index => index % 2 == 0
+                ? chat.GetOrCreateDirectConversationAsync(alice, bob)
+                : chat.GetOrCreateDirectConversationAsync(bob, alice)));
+
+    Check(
+        concurrentConversationIds.All(conversation => conversation.ConversationId == ab1.ConversationId),
+        "concurrent direct-conversation creation resolves to one canonical conversation");
+
     var ac = await chat.GetOrCreateDirectConversationAsync(alice, carol);
     Check(ac.ConversationId != ab1.ConversationId, "different pair gets different conversation");
 
