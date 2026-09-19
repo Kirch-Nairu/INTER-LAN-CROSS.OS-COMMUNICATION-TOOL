@@ -83,6 +83,45 @@ public sealed class ChatHub(
         await base.OnDisconnectedAsync(exception);
     }
 
+    public async Task SetTyping(
+        Guid conversationId,
+        bool isTyping)
+    {
+        if (!Context.Items.TryGetValue("principal", out var value) ||
+            value is not SessionPrincipal principal)
+        {
+            throw new HubException("Authenticated session is required.");
+        }
+
+        IReadOnlyList<Guid> members;
+        try
+        {
+            members = await chat.GetDirectMemberIdsAsync(
+                principal.UserId,
+                conversationId,
+                Context.ConnectionAborted);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new HubException("Direct conversation access denied.");
+        }
+
+        var payload = new TypingIndicatorResponse(
+            conversationId,
+            principal.UserId,
+            isTyping,
+            DateTimeOffset.UtcNow);
+
+        foreach (var memberId in members.Where(id => id != principal.UserId))
+        {
+            await Clients.Group(UserGroup(memberId))
+                .SendAsync(
+                    "TypingChanged",
+                    payload,
+                    Context.ConnectionAborted);
+        }
+    }
+
     public ControlPong Ping() =>
         new(ApiContractVersion.Current, DateTimeOffset.UtcNow, "ok");
 
