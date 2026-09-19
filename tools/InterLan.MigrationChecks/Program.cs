@@ -15,7 +15,8 @@ var historicalMigrations = new[]
     "002_p1_identity_enrollment",
     "003_p2_direct_messages",
     "004_p2_device_pairing_persistence",
-    "005_p2_device_credential_lifecycle"
+    "005_p2_device_credential_lifecycle",
+    "006_p2_query_indexes"
 };
 
 foreach (var historicalMigration in historicalMigrations)
@@ -66,7 +67,7 @@ foreach (var historicalMigration in historicalMigrations)
             history.CommandText = "SELECT COUNT(1) FROM schema_migrations;";
             var count = Convert.ToInt32(await history.ExecuteScalarAsync());
             Check(
-                count == 6,
+                count == 7,
                 $"{historicalMigration} upgrades through all current migrations");
         }
 
@@ -141,7 +142,7 @@ foreach (var historicalMigration in historicalMigrations)
         await using var idempotentHistory = idempotentConnection.CreateCommand();
         idempotentHistory.CommandText = "SELECT COUNT(1) FROM schema_migrations;";
         Check(
-            Convert.ToInt32(await idempotentHistory.ExecuteScalarAsync()) == 6,
+            Convert.ToInt32(await idempotentHistory.ExecuteScalarAsync()) == 7,
             $"{historicalMigration} migration replay remains idempotent");
     }
     finally
