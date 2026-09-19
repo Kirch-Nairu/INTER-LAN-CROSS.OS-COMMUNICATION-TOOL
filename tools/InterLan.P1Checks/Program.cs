@@ -166,6 +166,12 @@ try
 
     var ownerPrincipal = await store.ValidateSessionAsync(ownerSession.BearerToken);
     Check(ownerPrincipal is not null && ownerPrincipal.Role == "OWNER", "owner session remains valid after member revocation");
+
+    Check(await store.IsDiscoveryEnabledAsync(), "persisted discovery policy is enabled");
+
+    await store.RevokeSessionAsync(owner.OwnerUserId, ownerSession.SessionId);
+    var revokedOwner = await store.ValidateSessionAsync(ownerSession.BearerToken);
+    Check(revokedOwner is null, "explicit owner-authorized session revocation invalidates token");
 }
 finally
 {
