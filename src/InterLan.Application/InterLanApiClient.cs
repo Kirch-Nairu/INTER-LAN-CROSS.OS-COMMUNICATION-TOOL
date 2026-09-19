@@ -443,6 +443,19 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Revoke-other-sessions response was empty.");
     }
 
+    public async Task<DirectGlobalMessageSearchResponse> SearchAllDirectMessagesAsync(
+        string query,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<DirectGlobalMessageSearchResponse>(
+            $"/api/v1/direct/search?q={Uri.EscapeDataString(query)}&limit={limit}",
+            cancellationToken)
+            ?? throw new InvalidDataException("Global direct-message search response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
