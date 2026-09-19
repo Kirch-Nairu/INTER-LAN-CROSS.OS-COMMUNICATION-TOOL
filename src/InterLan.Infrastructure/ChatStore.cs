@@ -420,6 +420,34 @@ public sealed class ChatStore(SqliteDatabase database)
         return messages;
     }
 
+    public async Task<MessagePageResponse> GetDirectHistoryPageAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        Guid? afterMessageId,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (limit is < 1 or > MaxMessagePageSize)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        var items = await GetDirectHistoryAsync(
+            actorUserId,
+            conversationId,
+            afterMessageId,
+            limit + 1,
+            cancellationToken);
+
+        var hasMore = items.Count > limit;
+        var pageItems = hasMore
+            ? items.Take(limit).ToArray()
+            : items.ToArray();
+
+        return new MessagePageResponse(
+            pageItems,
+            pageItems.Length == 0 ? null : pageItems[^1].MessageId,
+            hasMore);
+    }
+
     public async Task<IReadOnlyList<Guid>> GetDirectMemberIdsAsync(
         Guid actorUserId,
         Guid conversationId,
