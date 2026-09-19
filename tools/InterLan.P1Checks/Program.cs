@@ -205,6 +205,15 @@ try
         secondDeviceSession.DeviceId == secondDeviceDecision.DeviceId,
         "additional approved device receives session for existing user identity");
 
+    var currentDeviceSecurity = await store.GetCurrentDeviceSecurityAsync(
+        memberSession.UserId,
+        memberSession.DeviceId!.Value);
+
+    Check(
+        currentDeviceSecurity.DeviceId == memberSession.DeviceId &&
+        currentDeviceSecurity.CredentialCreatedUtc is not null,
+        "current paired device exposes credential lifecycle security state");
+
     var memberSessions = await store.ListOwnSessionsAsync(
         memberSession.UserId,
         memberSession.SessionId);
