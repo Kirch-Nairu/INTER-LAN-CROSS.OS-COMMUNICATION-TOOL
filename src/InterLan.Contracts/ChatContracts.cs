@@ -127,3 +127,12 @@ public sealed record UserDirectorySearchResponse(
 public sealed record DirectUnreadSummaryResponse(
     int TotalUnreadMessages,
     int ConversationsWithUnread);
+
+public sealed record DirectGlobalMessageSearchHitResponse(
+    Guid ConversationId,
+    UserSummaryResponse OtherUser,
+    MessageResponse Message);
+
+public sealed record DirectGlobalMessageSearchResponse(
+    string Query,
+    IReadOnlyList<DirectGlobalMessageSearchHitResponse> Hits);
