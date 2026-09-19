@@ -7,6 +7,7 @@ namespace InterLan.Server.Realtime;
 
 public sealed class ChatHub(
     EnrollmentStore enrollment,
+    ChatStore chat,
     RealtimeConnectionRegistry connections,
     RealtimeTicketStore tickets) : Hub
 {
