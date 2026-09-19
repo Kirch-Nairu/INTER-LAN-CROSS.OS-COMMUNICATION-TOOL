@@ -110,12 +110,16 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveUserAsync(
             connection,
             actorUserId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             SELECT g.group_id, g.name, g.topic,
@@ -141,6 +145,7 @@ public sealed class GroupStore(SqliteDatabase database)
                 DateTimeOffset.Parse(reader.GetString(4))));
         }
 
+        transaction.Commit();
         return groups;
     }
 
@@ -150,12 +155,17 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
-        return await GetGroupDetailsAsync(
+        using var transaction = BeginReadTransaction(connection);
+
+        var details = await GetGroupDetailsAsync(
             connection,
-            transaction: null,
+            transaction,
             actorUserId,
             groupId,
             cancellationToken);
+
+        transaction.Commit();
+        return details;
     }
 
     private static async Task<GroupDetailsResponse> GetGroupDetailsAsync(
@@ -808,11 +818,14 @@ public sealed class GroupStore(SqliteDatabase database)
             throw new ArgumentOutOfRangeException(nameof(limit));
 
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         string? afterCreatedUtc = null;
         string? afterId = null;
@@ -820,6 +833,7 @@ public sealed class GroupStore(SqliteDatabase database)
         if (afterMessageId is { } cursor)
         {
             await using var cursorCommand = connection.CreateCommand();
+            cursorCommand.Transaction = transaction;
             cursorCommand.CommandText =
                 """
                 SELECT created_utc, message_id
@@ -842,6 +856,7 @@ public sealed class GroupStore(SqliteDatabase database)
         }
 
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             SELECT message_id, scope_type, scope_id, sender_user_id,
@@ -872,6 +887,7 @@ public sealed class GroupStore(SqliteDatabase database)
         while (await reader.ReadAsync(cancellationToken))
             messages.Add(ReadMessage(reader));
 
+        transaction.Commit();
         return messages;
     }
 
@@ -886,11 +902,14 @@ public sealed class GroupStore(SqliteDatabase database)
             throw new ArgumentOutOfRangeException(nameof(limit));
 
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         string? beforeCreatedUtc = null;
         string? beforeId = null;
@@ -898,6 +917,7 @@ public sealed class GroupStore(SqliteDatabase database)
         if (beforeMessageId is { } cursor)
         {
             await using var cursorCommand = connection.CreateCommand();
+            cursorCommand.Transaction = transaction;
             cursorCommand.CommandText =
                 """
                 SELECT created_utc, message_id
@@ -920,6 +940,7 @@ public sealed class GroupStore(SqliteDatabase database)
         }
 
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             SELECT message_id, scope_type, scope_id, sender_user_id,
@@ -956,10 +977,13 @@ public sealed class GroupStore(SqliteDatabase database)
 
         descending.Reverse();
 
-        return new RecentMessagePageResponse(
+        var page = new RecentMessagePageResponse(
             descending,
             descending.Count == 0 ? null : descending[0].MessageId,
             hasOlder);
+
+        transaction.Commit();
+        return page;
     }
 
     public async Task<MessagePageResponse> GetGroupHistoryPageAsync(
