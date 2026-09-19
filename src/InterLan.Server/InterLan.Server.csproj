@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../InterLan.Application/InterLan.Application.csproj" />
+    <ProjectReference Include="../InterLan.Contracts/InterLan.Contracts.csproj" />
+    <ProjectReference Include="../InterLan.Infrastructure/InterLan.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

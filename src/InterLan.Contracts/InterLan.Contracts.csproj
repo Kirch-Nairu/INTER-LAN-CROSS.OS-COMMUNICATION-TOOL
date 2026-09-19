@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../InterLan.Domain/InterLan.Domain.csproj" />
+  </ItemGroup>
+</Project>

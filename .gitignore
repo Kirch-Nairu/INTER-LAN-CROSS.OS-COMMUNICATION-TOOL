@@ -1,0 +1,26 @@
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+.DS_Store
+
+# Runtime/local state
+data/
+*.db
+*.db-shm
+*.db-wal
+runtime.json
+*.pfx
+*.pem
+*.key
+
+# Web
+web-client/node_modules/
+src/InterLan.Server/wwwroot/client/
+
+# Secrets
+.env
+.env.*
+!.env.example
