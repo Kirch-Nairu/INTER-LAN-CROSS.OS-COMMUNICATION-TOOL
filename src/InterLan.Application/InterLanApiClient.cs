@@ -377,6 +377,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Message detail response was empty.");
     }
 
+    public async Task<IReadOnlyList<UserPresenceResponse>> ListOnlinePresenceAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<UserPresenceResponse[]>(
+            "/api/v1/presence",
+            cancellationToken)
+            ?? Array.Empty<UserPresenceResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
