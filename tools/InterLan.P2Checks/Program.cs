@@ -215,6 +215,17 @@ try
         deliveredReceipts[0].ReadUtc is null,
         "recipient delivery acknowledgement is durable and idempotent");
 
+    var aliceDefaultPreference =
+        await chat.GetDirectConversationPreferenceAsync(
+            alice,
+            ab1.ConversationId);
+
+    Check(
+        !aliceDefaultPreference.IsPinned &&
+        aliceDefaultPreference.MutedUntilUtc is null &&
+        !aliceDefaultPreference.IsArchived,
+        "direct conversation preference defaults are neutral");
+
     var bobBeforeReadSummaries =
         await chat.ListDirectConversationSummariesAsync(bob);
     var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
