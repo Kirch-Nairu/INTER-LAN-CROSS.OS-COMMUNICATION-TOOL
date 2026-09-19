@@ -31,6 +31,31 @@ foreach (var historicalMigration in historicalMigrations)
             databasePath,
             historicalMigration);
 
+        var preservedUserId = Guid.NewGuid();
+        await using (var preUpgrade = database.OpenConnection())
+        {
+            await using var seed = preUpgrade.CreateCommand();
+            seed.CommandText =
+                """
+                INSERT INTO users (
+                    user_id, username, display_name, role, created_utc
+                ) VALUES (
+                    $id, $username, $displayName, 'MEMBER', $createdUtc
+                );
+                """;
+            seed.Parameters.AddWithValue("$id", preservedUserId.ToString("D"));
+            seed.Parameters.AddWithValue(
+                "$username",
+                $"preserved-{historicalMigration}");
+            seed.Parameters.AddWithValue(
+                "$displayName",
+                $"Preserved {historicalMigration}");
+            seed.Parameters.AddWithValue(
+                "$createdUtc",
+                DateTimeOffset.UtcNow.ToString("O"));
+            await seed.ExecuteNonQueryAsync();
+        }
+
         await database.InitializeAsync();
 
         await using var connection = database.OpenConnection();
@@ -42,6 +67,16 @@ foreach (var historicalMigration in historicalMigrations)
             Check(
                 count == 5,
                 $"{historicalMigration} upgrades through all current migrations");
+        }
+
+        await using (var preserved = connection.CreateCommand())
+        {
+            preserved.CommandText =
+                "SELECT COUNT(1) FROM users WHERE user_id = $id;";
+            preserved.Parameters.AddWithValue("$id", preservedUserId.ToString("D"));
+            Check(
+                Convert.ToInt32(await preserved.ExecuteScalarAsync()) == 1,
+                $"{historicalMigration} preserves pre-upgrade user data");
         }
 
         var deviceColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
