@@ -524,8 +524,8 @@ public sealed class ChatStore(SqliteDatabase database)
             return new DirectUnreadSummaryResponse(0, 0);
 
         return new DirectUnreadSummaryResponse(
-            reader.GetInt32(0),
-            reader.GetInt32(1));
+            checked((int)reader.GetInt64(0)),
+            checked((int)reader.GetInt64(1)));
     }
 
     public async Task<PersistedMessageResult> SendDirectMessageAsync(
