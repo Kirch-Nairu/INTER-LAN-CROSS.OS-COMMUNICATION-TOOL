@@ -215,6 +215,15 @@ try
         memberSessions.Single(session => session.Current).SessionId == memberSession.SessionId,
         "user session inventory identifies current session across multiple devices");
 
+    await store.RevokeOwnSessionAsync(
+        memberSession.UserId,
+        secondDeviceSession.SessionId);
+
+    Check(
+        await store.ValidateSessionAsync(secondDeviceSession.BearerToken) is null &&
+        await store.ValidateSessionAsync(memberSession.BearerToken) is not null,
+        "user can revoke another own session without revoking current session");
+
     var secondExchangeRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
         store.ExchangeApprovedJoinAsync(join.RequestId, enrollmentSecret, TimeSpan.FromHours(2)));
     Check(secondExchangeRejected, "enrollment exchange is one-use");
