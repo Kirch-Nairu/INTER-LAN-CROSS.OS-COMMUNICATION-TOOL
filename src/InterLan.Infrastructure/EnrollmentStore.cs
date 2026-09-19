@@ -502,6 +502,74 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         return principal;
     }
 
+    public async Task<IReadOnlyList<PendingJoinRequestResponse>> ListPendingJoinsAsync(
+        Guid ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireOwnerAsync(connection, ownerUserId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT request_id, requested_username, display_name, device_name, platform, created_utc
+            FROM join_requests
+            WHERE status = 'PENDING'
+            ORDER BY created_utc ASC;
+            """;
+
+        var rows = new List<PendingJoinRequestResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new PendingJoinRequestResponse(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                DateTimeOffset.Parse(reader.GetString(5))));
+        }
+
+        return rows;
+    }
+
+    public async Task<IReadOnlyList<DeviceSummaryResponse>> ListDevicesAsync(
+        Guid ownerUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireOwnerAsync(connection, ownerUserId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT d.device_id, d.user_id, u.username, u.display_name,
+                   d.device_name, d.platform, d.approved_utc, d.revoked_utc, d.last_seen_utc
+            FROM devices d
+            JOIN users u ON u.user_id = d.user_id
+            ORDER BY COALESCE(d.approved_utc, '') DESC, d.device_name ASC;
+            """;
+
+        var rows = new List<DeviceSummaryResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new DeviceSummaryResponse(
+                Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5),
+                reader.IsDBNull(6) ? null : DateTimeOffset.Parse(reader.GetString(6)),
+                reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7)),
+                reader.IsDBNull(8) ? null : DateTimeOffset.Parse(reader.GetString(8))));
+        }
+
+        return rows;
+    }
+
     public async Task RevokeDeviceAsync(
         Guid ownerUserId,
         Guid deviceId,
