@@ -2,4 +2,7 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../InterLan.Testing/InterLan.Testing.csproj" />
+  </ItemGroup>
 </Project>
