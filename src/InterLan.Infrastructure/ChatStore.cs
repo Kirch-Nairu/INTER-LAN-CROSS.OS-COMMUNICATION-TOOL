@@ -235,6 +235,68 @@ public sealed class ChatStore(SqliteDatabase database)
             .ToArray();
     }
 
+    public async Task<IReadOnlyList<DirectConversationActivityResponse>> ListDirectConversationActivityAsync(
+        Guid actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireActiveUserAsync(connection, actorUserId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT
+                c.conversation_id,
+                COALESCE(MAX(m.created_utc), c.created_utc) AS activity_utc,
+                (
+                    SELECT m2.message_id
+                    FROM messages m2
+                    WHERE m2.scope_type = 'DIRECT'
+                      AND m2.scope_id = c.conversation_id
+                    ORDER BY m2.created_utc DESC, m2.message_id DESC
+                    LIMIT 1
+                ) AS last_message_id,
+                (
+                    SELECT COUNT(1)
+                    FROM messages um
+                    WHERE um.scope_type = 'DIRECT'
+                      AND um.scope_id = c.conversation_id
+                      AND um.deleted_utc IS NULL
+                      AND um.sender_user_id <> $actor
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM message_receipts ur
+                          WHERE ur.message_id = um.message_id
+                            AND ur.user_id = $actor
+                            AND ur.read_utc IS NOT NULL
+                      )
+                ) AS unread_count
+            FROM direct_conversations c
+            JOIN direct_conversation_members mine
+              ON mine.conversation_id = c.conversation_id
+             AND mine.user_id = $actor
+            LEFT JOIN messages m
+              ON m.scope_type = 'DIRECT'
+             AND m.scope_id = c.conversation_id
+            GROUP BY c.conversation_id, c.created_utc
+            ORDER BY activity_utc DESC, c.conversation_id DESC;
+            """;
+        command.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+
+        var rows = new List<DirectConversationActivityResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            rows.Add(new DirectConversationActivityResponse(
+                Guid.Parse(reader.GetString(0)),
+                DateTimeOffset.Parse(reader.GetString(1)),
+                reader.IsDBNull(2) ? null : Guid.Parse(reader.GetString(2)),
+                reader.GetInt32(3)));
+        }
+
+        return rows;
+    }
+
     public async Task<PersistedMessageResult> SendDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
