@@ -207,6 +207,53 @@ try
         secondAdminAdded.Role == "ADMIN",
         "owner can establish multiple admins");
 
+    await using (var disableConnection = database.OpenConnection())
+    {
+        await using var disable = disableConnection.CreateCommand();
+        disable.CommandText =
+            """
+            UPDATE users
+            SET disabled_utc = $disabledUtc
+            WHERE user_id = $userId;
+            """;
+        disable.Parameters.AddWithValue(
+            "$disabledUtc",
+            DateTimeOffset.UtcNow.ToString("O"));
+        disable.Parameters.AddWithValue("$userId", secondAdminId.ToString("D"));
+        await disable.ExecuteNonQueryAsync();
+    }
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.GetGroupDetailsAsync(
+                secondAdminId,
+                created.GroupId);
+        },
+        "disabled active member loses group authority");
+
+    var detailsWhileDisabled = await groups.GetGroupDetailsAsync(
+        ownerId,
+        created.GroupId);
+
+    Check(
+        detailsWhileDisabled.Members.All(member =>
+            member.UserId != secondAdminId),
+        "disabled user is excluded from active group roster");
+
+    await using (var enableConnection = database.OpenConnection())
+    {
+        await using var enable = enableConnection.CreateCommand();
+        enable.CommandText =
+            """
+            UPDATE users
+            SET disabled_utc = NULL
+            WHERE user_id = $userId;
+            """;
+        enable.Parameters.AddWithValue("$userId", secondAdminId.ToString("D"));
+        await enable.ExecuteNonQueryAsync();
+    }
+
     var promoted = await groups.UpdateMemberRoleAsync(
         ownerId,
         created.GroupId,
