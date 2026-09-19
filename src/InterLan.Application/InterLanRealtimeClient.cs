@@ -51,6 +51,18 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
             "ReceiptUpdated",
             receipt => ReceiptUpdated?.Invoke(receipt));
 
+        _connection.On<GroupMessageDeletedResponse>(
+            "GroupMessageDeleted",
+            message => GroupMessageDeleted?.Invoke(message));
+
+        _connection.On<GroupMessageReceiptsChangedResponse>(
+            "GroupReceiptUpdated",
+            receipt => GroupReceiptUpdated?.Invoke(receipt));
+
+        _connection.On<GroupTypingIndicatorResponse>(
+            "GroupTypingChanged",
+            typing => GroupTypingChanged?.Invoke(typing));
+
         _connection.On<UserPresenceResponse>(
             "PresenceChanged",
             presence => PresenceChanged?.Invoke(presence));
@@ -82,6 +94,9 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
     public event Action<MessageResponse>? MessageEdited;
     public event Action<MessageDeletedResponse>? MessageDeleted;
     public event Action<MessageReceiptsChangedResponse>? ReceiptUpdated;
+    public event Action<GroupMessageDeletedResponse>? GroupMessageDeleted;
+    public event Action<GroupMessageReceiptsChangedResponse>? GroupReceiptUpdated;
+    public event Action<GroupTypingIndicatorResponse>? GroupTypingChanged;
     public event Action<UserPresenceResponse>? PresenceChanged;
     public event Action<TypingIndicatorResponse>? TypingChanged;
     public event Action<Exception?>? Reconnecting;
@@ -105,6 +120,16 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
         _connection.InvokeAsync(
             "SetTyping",
             conversationId,
+            isTyping,
+            cancellationToken);
+
+    public Task SetGroupTypingAsync(
+        Guid groupId,
+        bool isTyping,
+        CancellationToken cancellationToken = default) =>
+        _connection.InvokeAsync(
+            "SetGroupTyping",
+            groupId,
             isTyping,
             cancellationToken);
 
