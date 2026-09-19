@@ -98,6 +98,16 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
         CancellationToken cancellationToken = default) =>
         _connection.StopAsync(cancellationToken);
 
+    public Task SetTypingAsync(
+        Guid conversationId,
+        bool isTyping,
+        CancellationToken cancellationToken = default) =>
+        _connection.InvokeAsync(
+            "SetTyping",
+            conversationId,
+            isTyping,
+            cancellationToken);
+
     public ValueTask DisposeAsync() =>
         _connection.DisposeAsync();
 }
