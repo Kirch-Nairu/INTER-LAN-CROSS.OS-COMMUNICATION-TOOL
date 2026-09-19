@@ -616,6 +616,24 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Group message response was empty.");
     }
 
+    public async Task<RecentMessagePageResponse> GetGroupRecentHistoryPageAsync(
+        Guid groupId,
+        Guid? beforeMessageId = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        var path = $"/api/v1/groups/{groupId:D}/messages/recent?limit={limit}";
+        if (beforeMessageId is { } cursor)
+            path += $"&beforeMessageId={cursor:D}";
+
+        return await _httpClient.GetFromJsonAsync<RecentMessagePageResponse>(
+            path,
+            cancellationToken)
+            ?? throw new InvalidDataException("Recent group message page response was empty.");
+    }
+
     public async Task<MessagePageResponse> GetGroupHistoryPageAsync(
         Guid groupId,
         Guid? afterMessageId = null,
