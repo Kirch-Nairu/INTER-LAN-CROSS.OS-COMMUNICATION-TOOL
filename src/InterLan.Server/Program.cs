@@ -41,6 +41,7 @@ builder.Services.AddSingleton(certificate);
 builder.Services.AddSingleton<IServerIdentityStore, SqliteServerIdentityStore>();
 builder.Services.AddSingleton<EnrollmentStore>();
 builder.Services.AddSingleton<ChatStore>();
+builder.Services.AddSingleton<RealtimeConnectionRegistry>();
 builder.Services.AddHostedService<LanDiscoveryBroadcaster>();
 builder.Services.AddSignalR();
 builder.Services.AddProblemDetails();
@@ -312,12 +313,14 @@ app.MapPost("/api/v1/sessions/{sessionId:guid}/revoke", async (
     Guid sessionId,
     HttpContext context,
     EnrollmentStore enrollment,
+    RealtimeConnectionRegistry realtimeConnections,
     CancellationToken cancellationToken) =>
 {
     try
     {
         var owner = await AuthorizationHelpers.RequireOwnerAsync(context, enrollment, cancellationToken);
         await enrollment.RevokeSessionAsync(owner.UserId, sessionId, cancellationToken);
+        realtimeConnections.RevokeSession(sessionId);
         return Results.NoContent();
     }
     catch (UnauthorizedAccessException)
@@ -334,12 +337,14 @@ app.MapPost("/api/v1/devices/{deviceId:guid}/revoke", async (
     Guid deviceId,
     HttpContext context,
     EnrollmentStore enrollment,
+    RealtimeConnectionRegistry realtimeConnections,
     CancellationToken cancellationToken) =>
 {
     try
     {
         var owner = await AuthorizationHelpers.RequireOwnerAsync(context, enrollment, cancellationToken);
         await enrollment.RevokeDeviceAsync(owner.UserId, deviceId, cancellationToken);
+        realtimeConnections.RevokeDevice(deviceId);
         return Results.NoContent();
     }
     catch (UnauthorizedAccessException)
