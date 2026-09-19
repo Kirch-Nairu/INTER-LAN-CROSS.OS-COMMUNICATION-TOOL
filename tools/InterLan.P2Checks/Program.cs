@@ -226,6 +226,21 @@ try
         !aliceDefaultPreference.IsArchived,
         "direct conversation preference defaults are neutral");
 
+    var bobMuteUntil = DateTimeOffset.UtcNow.AddMinutes(30);
+    var bobPreference = await chat.UpdateDirectConversationPreferenceAsync(
+        bob,
+        ab1.ConversationId,
+        new UpdateDirectConversationPreferenceRequest(
+            IsPinned: true,
+            MutedUntilUtc: bobMuteUntil,
+            IsArchived: false));
+
+    Check(
+        bobPreference.IsPinned &&
+        bobPreference.MutedUntilUtc is not null &&
+        !bobPreference.IsArchived,
+        "direct conversation preference persists pin and mute state");
+
     var bobBeforeReadSummaries =
         await chat.ListDirectConversationSummariesAsync(bob);
     var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
