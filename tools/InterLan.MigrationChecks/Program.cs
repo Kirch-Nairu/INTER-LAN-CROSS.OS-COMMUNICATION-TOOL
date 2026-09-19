@@ -35,6 +35,13 @@ foreach (var historicalMigration in historicalMigrations)
             historicalMigration);
 
         var preservedUserId = Guid.NewGuid();
+        var preservedPeerId = Guid.NewGuid();
+        var preservedConversationId = Guid.NewGuid();
+        var preservedMessageId = Guid.NewGuid();
+        var preservedMessageClientId = Guid.NewGuid();
+        var preservedDeviceId = Guid.NewGuid();
+        var preservedGroupId = Guid.NewGuid();
+
         await using (var preUpgrade = database.OpenConnection())
         {
             await using var seed = preUpgrade.CreateCommand();
@@ -57,6 +64,91 @@ foreach (var historicalMigration in historicalMigrations)
                 "$createdUtc",
                 DateTimeOffset.UtcNow.ToString("O"));
             await seed.ExecuteNonQueryAsync();
+
+            if (historicalMigration == "007_p2_direct_preferences")
+            {
+                var now = DateTimeOffset.UtcNow.ToString("O");
+
+                await using var seedP2 = preUpgrade.CreateCommand();
+                seedP2.CommandText =
+                    """
+                    INSERT INTO users (
+                        user_id, username, display_name, role, created_utc
+                    ) VALUES (
+                        $peerId, 'preserved-p2-peer', 'Preserved P2 Peer',
+                        'MEMBER', $utc
+                    );
+
+                    INSERT INTO direct_conversations (
+                        conversation_id, created_utc, pair_key
+                    ) VALUES (
+                        $conversationId, $utc, 'preserved-p2-pair'
+                    );
+
+                    INSERT INTO direct_conversation_members (
+                        conversation_id, user_id, joined_utc
+                    ) VALUES
+                        ($conversationId, $userId, $utc),
+                        ($conversationId, $peerId, $utc);
+
+                    INSERT INTO messages (
+                        message_id, scope_type, scope_id, sender_user_id,
+                        client_message_id, body, reply_to_message_id,
+                        created_utc, edited_utc, deleted_utc
+                    ) VALUES (
+                        $messageId, 'DIRECT', $conversationId, $userId,
+                        $clientMessageId, 'preserved-p2-message', NULL,
+                        $utc, NULL, NULL
+                    );
+
+                    INSERT INTO message_receipts (
+                        message_id, user_id, delivered_utc, read_utc
+                    ) VALUES (
+                        $messageId, $peerId, $utc, $utc
+                    );
+
+                    INSERT INTO direct_conversation_preferences (
+                        conversation_id, user_id, pinned_utc,
+                        muted_until_utc, archived_utc, updated_utc
+                    ) VALUES (
+                        $conversationId, $userId, $utc,
+                        NULL, NULL, $utc
+                    );
+
+                    INSERT INTO devices (
+                        device_id, user_id, device_name, platform,
+                        certificate_fingerprint, approved_utc, revoked_utc,
+                        last_seen_utc, credential_hash, credential_created_utc,
+                        credential_rotated_utc, credential_last_used_utc
+                    ) VALUES (
+                        $deviceId, $userId, 'Preserved P2 Device', 'WINDOWS',
+                        NULL, $utc, NULL, $utc,
+                        'preserved-p2-credential-hash', $utc, NULL, $utc
+                    );
+
+                    INSERT INTO groups (
+                        group_id, name, topic, created_by_user_id, created_utc
+                    ) VALUES (
+                        $groupId, 'Preserved Pre-P3 Group',
+                        'existing before migration 008', $userId, $utc
+                    );
+
+                    INSERT INTO group_members (
+                        group_id, user_id, group_role, joined_utc, removed_utc
+                    ) VALUES (
+                        $groupId, $userId, 'OWNER', $utc, NULL
+                    );
+                    """;
+                seedP2.Parameters.AddWithValue("$peerId", preservedPeerId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$conversationId", preservedConversationId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$userId", preservedUserId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$messageId", preservedMessageId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$clientMessageId", preservedMessageClientId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$deviceId", preservedDeviceId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$groupId", preservedGroupId.ToString("D"));
+                seedP2.Parameters.AddWithValue("$utc", now);
+                await seedP2.ExecuteNonQueryAsync();
+            }
         }
 
         await database.InitializeAsync();
@@ -80,6 +172,105 @@ foreach (var historicalMigration in historicalMigrations)
             Check(
                 Convert.ToInt32(await preserved.ExecuteScalarAsync()) == 1,
                 $"{historicalMigration} preserves pre-upgrade user data");
+        }
+
+        if (historicalMigration == "007_p2_direct_preferences")
+        {
+            await using var preservedP2 = connection.CreateCommand();
+            preservedP2.CommandText =
+                """
+                SELECT CASE WHEN
+                    EXISTS (
+                        SELECT 1
+                        FROM direct_conversations
+                        WHERE conversation_id = $conversationId
+                          AND pair_key = 'preserved-p2-pair'
+                    )
+                    AND (
+                        SELECT COUNT(1)
+                        FROM direct_conversation_members
+                        WHERE conversation_id = $conversationId
+                          AND user_id IN ($userId, $peerId)
+                    ) = 2
+                    AND EXISTS (
+                        SELECT 1
+                        FROM messages
+                        WHERE message_id = $messageId
+                          AND scope_type = 'DIRECT'
+                          AND scope_id = $conversationId
+                          AND sender_user_id = $userId
+                          AND client_message_id = $clientMessageId
+                          AND body = 'preserved-p2-message'
+                          AND deleted_utc IS NULL
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM message_receipts
+                        WHERE message_id = $messageId
+                          AND user_id = $peerId
+                          AND delivered_utc IS NOT NULL
+                          AND read_utc IS NOT NULL
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM direct_conversation_preferences
+                        WHERE conversation_id = $conversationId
+                          AND user_id = $userId
+                          AND pinned_utc IS NOT NULL
+                          AND archived_utc IS NULL
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM devices
+                        WHERE device_id = $deviceId
+                          AND user_id = $userId
+                          AND credential_hash = 'preserved-p2-credential-hash'
+                          AND credential_created_utc IS NOT NULL
+                          AND credential_last_used_utc IS NOT NULL
+                          AND revoked_utc IS NULL
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM groups
+                        WHERE group_id = $groupId
+                          AND created_by_user_id = $userId
+                          AND name = 'Preserved Pre-P3 Group'
+                    )
+                    AND EXISTS (
+                        SELECT 1
+                        FROM group_members
+                        WHERE group_id = $groupId
+                          AND user_id = $userId
+                          AND group_role = 'OWNER'
+                          AND removed_utc IS NULL
+                    )
+                THEN 1 ELSE 0 END;
+                """;
+            preservedP2.Parameters.AddWithValue(
+                "$conversationId",
+                preservedConversationId.ToString("D"));
+            preservedP2.Parameters.AddWithValue(
+                "$userId",
+                preservedUserId.ToString("D"));
+            preservedP2.Parameters.AddWithValue(
+                "$peerId",
+                preservedPeerId.ToString("D"));
+            preservedP2.Parameters.AddWithValue(
+                "$messageId",
+                preservedMessageId.ToString("D"));
+            preservedP2.Parameters.AddWithValue(
+                "$clientMessageId",
+                preservedMessageClientId.ToString("D"));
+            preservedP2.Parameters.AddWithValue(
+                "$deviceId",
+                preservedDeviceId.ToString("D"));
+            preservedP2.Parameters.AddWithValue(
+                "$groupId",
+                preservedGroupId.ToString("D"));
+
+            Check(
+                Convert.ToInt32(await preservedP2.ExecuteScalarAsync()) == 1,
+                "007_p2_direct_preferences preserves P2 data through migration 008");
         }
 
         var deviceColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
