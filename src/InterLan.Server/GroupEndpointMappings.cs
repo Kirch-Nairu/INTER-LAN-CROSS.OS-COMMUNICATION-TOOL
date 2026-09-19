@@ -375,6 +375,178 @@ public static class GroupEndpointMappings
             }
         }).RequireRateLimiting("message");
 
+        app.MapPost("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}/delivered", async (
+            Guid groupId,
+            Guid messageId,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            IHubContext<ChatHub> hub,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                await groups.MarkGroupMessageDeliveredAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken);
+
+                var receipts = await groups.GetGroupMessageReceiptsAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken);
+
+                await BroadcastGroupReceiptsAsync(
+                    groups,
+                    hub,
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    receipts,
+                    cancellationToken);
+
+                return Results.Ok(receipts);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+        app.MapPost("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}/read", async (
+            Guid groupId,
+            Guid messageId,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            IHubContext<ChatHub> hub,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                await groups.MarkGroupMessageReadAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken);
+
+                var receipts = await groups.GetGroupMessageReceiptsAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken);
+
+                await BroadcastGroupReceiptsAsync(
+                    groups,
+                    hub,
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    receipts,
+                    cancellationToken);
+
+                return Results.Ok(receipts);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        });
+
+        app.MapGet("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}/receipts", async (
+            Guid groupId,
+            Guid messageId,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                return Results.Ok(await groups.GetGroupMessageReceiptsAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        });
+
         return app;
+    }
+
+    private static async Task BroadcastGroupReceiptsAsync(
+        GroupStore groups,
+        IHubContext<ChatHub> hub,
+        Guid actorUserId,
+        Guid groupId,
+        Guid messageId,
+        IReadOnlyList<MessageReceiptResponse> receipts,
+        CancellationToken cancellationToken)
+    {
+        var memberIds = await groups.GetActiveGroupMemberIdsAsync(
+            actorUserId,
+            groupId,
+            cancellationToken);
+
+        var payload = new GroupMessageReceiptsChangedResponse(
+            groupId,
+            messageId,
+            receipts);
+
+        foreach (var memberId in memberIds)
+        {
+            await hub.Clients.Group(ChatHub.UserGroup(memberId))
+                .SendAsync(
+                    "GroupReceiptUpdated",
+                    payload,
+                    cancellationToken);
+        }
     }
 }
