@@ -559,6 +559,10 @@ app.MapPost("/api/v1/messages/{messageId:guid}/read", async (
     {
         return Results.Unauthorized();
     }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Conflict(new { error = exception.Message });
+    }
     catch (KeyNotFoundException exception)
     {
         return Results.NotFound(new { error = exception.Message });
