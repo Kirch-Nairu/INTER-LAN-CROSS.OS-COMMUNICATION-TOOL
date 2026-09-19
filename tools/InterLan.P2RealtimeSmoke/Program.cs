@@ -7,6 +7,7 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Text.Json;
 using InterLan.Application;
+using InterLan.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
 
 static int ReservePort()
@@ -62,8 +63,8 @@ var root = Path.Combine(Path.GetTempPath(), "interlan-p2-realtime-" + Guid.NewGu
 Directory.CreateDirectory(root);
 
 var port = ReservePort();
-var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-var serverDll = Path.Combine(repositoryRoot, "src", "InterLan.Server", "bin", "Release", "net10.0", "InterLan.Server.dll");
+var repositoryRoot = RepositoryLayout.FindRoot();
+var serverDll = RepositoryLayout.ServerDll(repositoryRoot);
 
 if (!File.Exists(serverDll))
 {
