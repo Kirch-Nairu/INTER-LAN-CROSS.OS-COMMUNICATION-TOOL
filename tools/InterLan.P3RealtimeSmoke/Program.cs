@@ -185,6 +185,106 @@ using (var addMember = await adminHttp.PostAsJsonAsync(
 
 Console.WriteLine("PASS owner/admin membership authority is reachable through HTTP API");
 
+using var createIsolationGroup = await ownerHttp.PostAsJsonAsync(
+    "/api/v1/groups",
+    new CreateGroupRequest("P3 Isolation", "HTTP IDOR proof"));
+createIsolationGroup.EnsureSuccessStatusCode();
+
+var isolationGroup =
+    await createIsolationGroup.Content.ReadFromJsonAsync<GroupDetailsResponse>()
+    ?? throw new InvalidDataException("Isolation group response was empty.");
+
+using var isolationSend = await ownerHttp.PostAsJsonAsync(
+    $"/api/v1/groups/{isolationGroup.GroupId:D}/messages",
+    new SendMessageRequest(Guid.NewGuid(), "foreign group message"));
+isolationSend.EnsureSuccessStatusCode();
+
+var isolationMessage =
+    await isolationSend.Content.ReadFromJsonAsync<MessageResponse>()
+    ?? throw new InvalidDataException("Isolation group message response was empty.");
+
+using (var nonMemberMessage = await adminHttp.GetAsync(
+    $"/api/v1/groups/{isolationGroup.GroupId:D}/messages/{isolationMessage.MessageId:D}"))
+{
+    if (nonMemberMessage.StatusCode != HttpStatusCode.Forbidden)
+    {
+        Console.Error.WriteLine(
+            $"FAIL non-member foreign message read returned {(int)nonMemberMessage.StatusCode}");
+        return 1;
+    }
+}
+
+using (var nonMemberEvents = await adminHttp.GetAsync(
+    $"/api/v1/groups/{isolationGroup.GroupId:D}/events?limit=100"))
+{
+    if (nonMemberEvents.StatusCode != HttpStatusCode.Forbidden)
+    {
+        Console.Error.WriteLine(
+            $"FAIL non-member foreign event read returned {(int)nonMemberEvents.StatusCode}");
+        return 1;
+    }
+}
+
+using (var crossGroupMessage = await ownerHttp.GetAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/{isolationMessage.MessageId:D}"))
+{
+    if (crossGroupMessage.StatusCode != HttpStatusCode.NotFound)
+    {
+        Console.Error.WriteLine(
+            $"FAIL cross-group message ID returned {(int)crossGroupMessage.StatusCode}");
+        return 1;
+    }
+}
+
+using (var crossGroupReceipts = await ownerHttp.GetAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/{isolationMessage.MessageId:D}/receipts"))
+{
+    if (crossGroupReceipts.StatusCode != HttpStatusCode.NotFound)
+    {
+        Console.Error.WriteLine(
+            $"FAIL cross-group receipt ID returned {(int)crossGroupReceipts.StatusCode}");
+        return 1;
+    }
+}
+
+using (var crossGroupRecent = await ownerHttp.GetAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/recent" +
+    $"?beforeMessageId={isolationMessage.MessageId:D}&limit=50"))
+{
+    if (crossGroupRecent.StatusCode != HttpStatusCode.NotFound)
+    {
+        Console.Error.WriteLine(
+            $"FAIL cross-group recent cursor returned {(int)crossGroupRecent.StatusCode}");
+        return 1;
+    }
+}
+
+using (var crossGroupEdit = await ownerHttp.PutAsJsonAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/{isolationMessage.MessageId:D}",
+    new EditMessageRequest("cross-group edit")))
+{
+    if (crossGroupEdit.StatusCode != HttpStatusCode.NotFound)
+    {
+        Console.Error.WriteLine(
+            $"FAIL cross-group edit returned {(int)crossGroupEdit.StatusCode}");
+        return 1;
+    }
+}
+
+using (var crossGroupDelete = await ownerHttp.DeleteAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/{isolationMessage.MessageId:D}"))
+{
+    if (crossGroupDelete.StatusCode != HttpStatusCode.NotFound)
+    {
+        Console.Error.WriteLine(
+            $"FAIL cross-group delete returned {(int)crossGroupDelete.StatusCode}");
+        return 1;
+    }
+}
+
+Console.WriteLine(
+    "PASS HTTP group/message routes enforce non-member and cross-group ID isolation");
+
 await using var ownerHub = CreateHub(baseUri, ownerToken);
 await using var memberHub = CreateHub(baseUri, memberEnrollment.Token);
 
