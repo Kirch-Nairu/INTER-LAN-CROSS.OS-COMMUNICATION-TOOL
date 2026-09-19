@@ -212,6 +212,80 @@ public sealed class GroupStore(SqliteDatabase database)
             members);
     }
 
+    public async Task<GroupDetailsResponse> UpdateGroupAsync(
+        Guid actorUserId,
+        Guid groupId,
+        UpdateGroupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var name = GroupTextPolicy.NormalizeName(request.Name);
+        var topic = GroupTextPolicy.NormalizeTopic(request.Topic);
+
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        var role = await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        if (role is not "OWNER" and not "ADMIN")
+            throw new UnauthorizedAccessException(
+                "Group owner or admin authority is required.");
+
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText =
+                """
+                UPDATE groups
+                SET name = $name,
+                    topic = $topic
+                WHERE group_id = $groupId;
+                """;
+            update.Parameters.AddWithValue("$name", name);
+            update.Parameters.AddWithValue(
+                "$topic",
+                topic is null ? DBNull.Value : topic);
+            update.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new KeyNotFoundException("Group not found.");
+        }
+
+        await AppendGroupEventAsync(
+            connection,
+            transaction,
+            groupId,
+            actorUserId,
+            null,
+            "GROUP_METADATA_UPDATED",
+            "{}",
+            now,
+            cancellationToken);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "GROUP_METADATA_UPDATED",
+            groupId,
+            "{}",
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+
+        return await GetGroupDetailsAsync(
+            actorUserId,
+            groupId,
+            cancellationToken);
+    }
+
     private static async Task AppendGroupEventAsync(
         SqliteConnection connection,
         SqliteTransaction transaction,
