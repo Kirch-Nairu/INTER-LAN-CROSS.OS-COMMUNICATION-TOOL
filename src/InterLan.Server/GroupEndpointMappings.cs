@@ -1,5 +1,7 @@
 using InterLan.Contracts;
 using InterLan.Infrastructure;
+using InterLan.Server.Realtime;
+using Microsoft.AspNetCore.SignalR;
 
 namespace InterLan.Server;
 
@@ -276,6 +278,102 @@ public static class GroupEndpointMappings
                 return Results.BadRequest(new { error = exception.Message });
             }
         });
+
+        app.MapGet("/api/v1/groups/{groupId:guid}/messages", async (
+            Guid groupId,
+            Guid? afterMessageId,
+            int? limit,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                return Results.Ok(await groups.GetGroupHistoryPageAsync(
+                    principal.UserId,
+                    groupId,
+                    afterMessageId,
+                    Math.Clamp(limit ?? 100, 1, GroupStore.MaxMessagePageSize),
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        });
+
+        app.MapPost("/api/v1/groups/{groupId:guid}/messages", async (
+            Guid groupId,
+            SendMessageRequest request,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            IHubContext<ChatHub> hub,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                var persisted = await groups.SendGroupMessageAsync(
+                    principal.UserId,
+                    groupId,
+                    request,
+                    cancellationToken);
+
+                if (persisted.Created)
+                {
+                    var memberIds = await groups.GetActiveGroupMemberIdsAsync(
+                        principal.UserId,
+                        groupId,
+                        cancellationToken);
+
+                    foreach (var memberId in memberIds)
+                    {
+                        await hub.Clients.Group(ChatHub.UserGroup(memberId))
+                            .SendAsync(
+                                "MessageCreated",
+                                persisted.Message,
+                                cancellationToken);
+                    }
+                }
+
+                return Results.Ok(persisted.Message);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireRateLimiting("message");
 
         return app;
     }
