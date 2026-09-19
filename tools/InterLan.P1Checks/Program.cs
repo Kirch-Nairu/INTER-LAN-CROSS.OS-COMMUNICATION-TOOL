@@ -387,7 +387,8 @@ try
                 'JOIN_REJECTED',
                 'SESSION_CREATED',
                 'DEVICE_REVOKED',
-                'SESSION_REVOKED'
+                'SESSION_REVOKED',
+                'SESSION_LOGOUT'
             );
             """;
         var auditCount = Convert.ToInt64(await audit.ExecuteScalarAsync());
