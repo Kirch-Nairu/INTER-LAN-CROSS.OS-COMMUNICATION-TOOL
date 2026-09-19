@@ -7,6 +7,8 @@ using InterLan.Server;
 using InterLan.Server.Networking;
 using InterLan.Server.Realtime;
 using Microsoft.Data.Sqlite;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,10 +36,31 @@ builder.Services.AddSingleton<EnrollmentStore>();
 builder.Services.AddHostedService<LanDiscoveryBroadcaster>();
 builder.Services.AddSignalR();
 builder.Services.AddProblemDetails();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddFixedWindowLimiter("auth", limiter =>
+    {
+        limiter.PermitLimit = 8;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+
+    options.AddFixedWindowLimiter("join", limiter =>
+    {
+        limiter.PermitLimit = 20;
+        limiter.Window = TimeSpan.FromMinutes(1);
+        limiter.QueueLimit = 0;
+        limiter.AutoReplenishment = true;
+    });
+});
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
+app.UseRateLimiter();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
@@ -102,7 +125,7 @@ app.MapPost("/api/v1/bootstrap/server", async (
     {
         return Results.BadRequest(new { error = exception.Message });
     }
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/v1/auth/owner/login", async (
     LoginRequest request,
@@ -121,7 +144,7 @@ app.MapPost("/api/v1/auth/owner/login", async (
     {
         return Results.Unauthorized();
     }
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/v1/invites", async (
     HttpContext context,
@@ -161,6 +184,38 @@ app.MapPost("/api/v1/join", async (
     catch (ArgumentException exception)
     {
         return Results.BadRequest(new { error = exception.Message });
+    }
+}).RequireRateLimiting("join");
+
+app.MapGet("/api/v1/join/pending", async (
+    HttpContext context,
+    EnrollmentStore enrollment,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var owner = await AuthorizationHelpers.RequireOwnerAsync(context, enrollment, cancellationToken);
+        return Results.Ok(await enrollment.ListPendingJoinsAsync(owner.UserId, cancellationToken));
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Unauthorized();
+    }
+});
+
+app.MapGet("/api/v1/devices", async (
+    HttpContext context,
+    EnrollmentStore enrollment,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var owner = await AuthorizationHelpers.RequireOwnerAsync(context, enrollment, cancellationToken);
+        return Results.Ok(await enrollment.ListDevicesAsync(owner.UserId, cancellationToken));
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Unauthorized();
     }
 });
 
@@ -207,7 +262,7 @@ app.MapPost("/api/v1/join/exchange", async (
     {
         return Results.Unauthorized();
     }
-});
+}).RequireRateLimiting("join");
 
 app.MapPost("/api/v1/sessions/{sessionId:guid}/revoke", async (
     Guid sessionId,
