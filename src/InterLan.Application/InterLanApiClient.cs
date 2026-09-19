@@ -137,6 +137,23 @@ public sealed class InterLanApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<RealtimeTicketResponse> CreateRealtimeTicketAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            "/api/v1/realtime/ticket",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<RealtimeTicketResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Realtime ticket response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
