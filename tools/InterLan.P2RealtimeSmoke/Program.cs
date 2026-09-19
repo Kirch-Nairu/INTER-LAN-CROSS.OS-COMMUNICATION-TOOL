@@ -367,7 +367,15 @@ var baseUri = server.BaseUri;
         return 1;
     }
 
-    Console.WriteLine("PASS recipient read acknowledgement advances durable receipt state");
+    var readRealtimeReceipt = await readReceiptEvent.Task.WaitAsync(
+        TimeSpan.FromSeconds(5));
+    if (readRealtimeReceipt.GetProperty("messageId").GetGuid() != persistedMessageId)
+    {
+        Console.Error.WriteLine("FAIL realtime read receipt event payload mismatch");
+        return 1;
+    }
+
+    Console.WriteLine("PASS read acknowledgement broadcasts realtime receipt state");
 
     await memberHub.StopAsync();
 
