@@ -8,9 +8,8 @@ namespace InterLan.Server.Networking;
 
 public sealed class LanDiscoveryBroadcaster(
     IServerIdentityStore identities,
-    EnrollmentStore enrollment,
+    ServerRuntimeSettings settings,
     ServerCertificateDescriptor certificate,
-    IConfiguration configuration,
     ILogger<LanDiscoveryBroadcaster> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,15 +25,13 @@ public sealed class LanDiscoveryBroadcaster(
             try
             {
                 var identity = await identities.GetAsync(stoppingToken);
-                var discoveryEnabled = await enrollment.IsDiscoveryEnabledAsync(stoppingToken);
-                if (identity is not null && discoveryEnabled)
+                if (identity is not null && settings.DiscoveryEnabled)
                 {
-                    var port = configuration.GetValue("InterLan:Server:Port", 7443);
                     var announcement = new DiscoveryAnnouncement(
                         LanDiscoveryProtocol.ProtocolId,
                         identity.ServerId,
                         identity.ServerName,
-                        port,
+                        settings.Port,
                         certificate.Sha256Fingerprint);
 
                     var payload = LanDiscoveryProtocol.Serialize(announcement);
