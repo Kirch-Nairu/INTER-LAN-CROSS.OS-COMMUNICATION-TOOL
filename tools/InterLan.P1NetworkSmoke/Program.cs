@@ -1,3 +1,4 @@
+using InterLan.Testing;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -17,8 +18,8 @@ static int ReservePort()
 }
 
 var port = ReservePort();
-var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-var serverDll = Path.Combine(repositoryRoot, "src", "InterLan.Server", "bin", "Release", "net10.0", "InterLan.Server.dll");
+var repositoryRoot = RepositoryLayout.FindRoot();
+var serverDll = RepositoryLayout.ServerDll(repositoryRoot);
 
 if (!File.Exists(serverDll))
 {
