@@ -6,6 +6,8 @@ namespace InterLan.Infrastructure;
 
 public sealed class GroupStore(SqliteDatabase database)
 {
+    public const int MaxMessageLength = 4_000;
+    public const int MaxMessagePageSize = 200;
     public async Task<GroupDetailsResponse> CreateGroupAsync(
         Guid actorUserId,
         CreateGroupRequest request,
@@ -627,6 +629,140 @@ public sealed class GroupStore(SqliteDatabase database)
             now);
     }
 
+    public async Task<PersistedMessageResult> SendGroupMessageAsync(
+        Guid actorUserId,
+        Guid groupId,
+        SendMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.ClientMessageId == Guid.Empty)
+            throw new ArgumentException("ClientMessageId must be non-empty.", nameof(request));
+
+        var body = MessageTextPolicy.Normalize(
+            request.Body,
+            MaxMessageLength);
+
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        var existing = await FindByClientMessageIdAsync(
+            connection,
+            transaction,
+            actorUserId,
+            request.ClientMessageId,
+            cancellationToken);
+
+        if (existing is not null)
+        {
+            EnsureGroupIdempotentReplayMatches(
+                existing,
+                groupId,
+                body,
+                request.ReplyToMessageId);
+            transaction.Commit();
+            return new PersistedMessageResult(existing, false);
+        }
+
+        if (request.ReplyToMessageId is { } replyTo)
+        {
+            await using var reply = connection.CreateCommand();
+            reply.Transaction = transaction;
+            reply.CommandText =
+                """
+                SELECT COUNT(1)
+                FROM messages
+                WHERE message_id = $messageId
+                  AND scope_type = 'GROUP'
+                  AND scope_id = $groupId
+                  AND deleted_utc IS NULL;
+                """;
+            reply.Parameters.AddWithValue("$messageId", replyTo.ToString("D"));
+            reply.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+            if (Convert.ToInt64(
+                    await reply.ExecuteScalarAsync(cancellationToken)) != 1)
+            {
+                throw new ArgumentException(
+                    "Reply target is not an active message in this group.",
+                    nameof(request));
+            }
+        }
+
+        var messageId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        await using var insert = connection.CreateCommand();
+        insert.Transaction = transaction;
+        insert.CommandText =
+            """
+            INSERT OR IGNORE INTO messages (
+                message_id, scope_type, scope_id, sender_user_id,
+                client_message_id, body, reply_to_message_id, created_utc,
+                edited_utc, deleted_utc
+            ) VALUES (
+                $messageId, 'GROUP', $groupId, $senderUserId,
+                $clientMessageId, $body, $replyToMessageId, $createdUtc,
+                NULL, NULL
+            );
+            """;
+        insert.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+        insert.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+        insert.Parameters.AddWithValue("$senderUserId", actorUserId.ToString("D"));
+        insert.Parameters.AddWithValue(
+            "$clientMessageId",
+            request.ClientMessageId.ToString("D"));
+        insert.Parameters.AddWithValue("$body", body);
+        insert.Parameters.AddWithValue(
+            "$replyToMessageId",
+            request.ReplyToMessageId is null
+                ? DBNull.Value
+                : request.ReplyToMessageId.Value.ToString("D"));
+        insert.Parameters.AddWithValue("$createdUtc", now.ToString("O"));
+
+        var inserted = await insert.ExecuteNonQueryAsync(cancellationToken);
+        if (inserted == 0)
+        {
+            var concurrent = await FindByClientMessageIdAsync(
+                connection,
+                transaction,
+                actorUserId,
+                request.ClientMessageId,
+                cancellationToken)
+                ?? throw new InvalidOperationException(
+                    "Group message idempotency conflict could not be resolved.");
+
+            EnsureGroupIdempotentReplayMatches(
+                concurrent,
+                groupId,
+                body,
+                request.ReplyToMessageId);
+
+            transaction.Commit();
+            return new PersistedMessageResult(concurrent, false);
+        }
+
+        transaction.Commit();
+
+        return new PersistedMessageResult(
+            new MessageResponse(
+                messageId,
+                "GROUP",
+                groupId,
+                actorUserId,
+                request.ClientMessageId,
+                body,
+                request.ReplyToMessageId,
+                now),
+            true);
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
@@ -759,6 +895,64 @@ public sealed class GroupStore(SqliteDatabase database)
                 ? null
                 : DateTimeOffset.Parse(reader.GetString(1)));
     }
+
+    private static async Task<MessageResponse?> FindByClientMessageIdAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid senderUserId,
+        Guid clientMessageId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT message_id, scope_type, scope_id, sender_user_id,
+                   client_message_id, body, reply_to_message_id, created_utc,
+                   edited_utc, deleted_utc
+            FROM messages
+            WHERE sender_user_id = $senderUserId
+              AND client_message_id = $clientMessageId;
+            """;
+        command.Parameters.AddWithValue("$senderUserId", senderUserId.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$clientMessageId",
+            clientMessageId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadMessage(reader)
+            : null;
+    }
+
+    private static void EnsureGroupIdempotentReplayMatches(
+        MessageResponse existing,
+        Guid groupId,
+        string body,
+        Guid? replyToMessageId)
+    {
+        if (existing.ScopeType != "GROUP" ||
+            existing.ScopeId != groupId ||
+            !string.Equals(existing.Body, body, StringComparison.Ordinal) ||
+            existing.ReplyToMessageId != replyToMessageId)
+        {
+            throw new InvalidOperationException(
+                "ClientMessageId was already used with different message content.");
+        }
+    }
+
+    private static MessageResponse ReadMessage(SqliteDataReader reader) =>
+        new(
+            Guid.Parse(reader.GetString(0)),
+            reader.GetString(1),
+            Guid.Parse(reader.GetString(2)),
+            Guid.Parse(reader.GetString(3)),
+            Guid.Parse(reader.GetString(4)),
+            reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+            reader.IsDBNull(6) ? null : Guid.Parse(reader.GetString(6)),
+            DateTimeOffset.Parse(reader.GetString(7)),
+            reader.IsDBNull(8) ? null : DateTimeOffset.Parse(reader.GetString(8)),
+            reader.IsDBNull(9) ? null : DateTimeOffset.Parse(reader.GetString(9)));
 
     private static async Task AppendGroupEventAsync(
         SqliteConnection connection,
