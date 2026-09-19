@@ -493,6 +493,33 @@ app.MapPost("/api/v1/direct/{conversationId:guid}/messages", async (
     }
 }).RequireRateLimiting("message");
 
+app.MapPost("/api/v1/messages/{messageId:guid}/delivered", async (
+    Guid messageId,
+    HttpContext context,
+    EnrollmentStore enrollment,
+    ChatStore chat,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(context, enrollment, cancellationToken);
+        await chat.MarkDeliveredAsync(principal.UserId, messageId, cancellationToken);
+        return Results.NoContent();
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return Results.Unauthorized();
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.Conflict(new { error = exception.Message });
+    }
+    catch (KeyNotFoundException exception)
+    {
+        return Results.NotFound(new { error = exception.Message });
+    }
+});
+
 app.MapPost("/api/v1/messages/{messageId:guid}/read", async (
     Guid messageId,
     HttpContext context,
