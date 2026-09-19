@@ -189,6 +189,41 @@ try
     var memberSession = await exchangeResponse.Content.ReadFromJsonAsync<JsonElement>();
     var memberToken = memberSession.GetProperty("bearerToken").GetString()!;
     var memberUserId = memberSession.GetProperty("userId").GetGuid();
+    var memberDeviceId = memberSession.GetProperty("deviceId").GetGuid();
+    var deviceCredential = memberSession.GetProperty("deviceCredential").GetString()!;
+
+    if (string.IsNullOrWhiteSpace(deviceCredential))
+    {
+        Console.Error.WriteLine("FAIL enrollment exchange did not return durable device credential");
+        return 1;
+    }
+
+    using var restartedClient = CreateHttpClient();
+    restartedClient.BaseAddress = baseUri;
+    var renewResponse = await restartedClient.PostAsJsonAsync("/api/v1/auth/device/renew", new
+    {
+        deviceId = memberDeviceId,
+        deviceCredential
+    });
+    if (!renewResponse.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine($"FAIL paired-device session renewal {(int)renewResponse.StatusCode}: {await renewResponse.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    var renewedSession = await renewResponse.Content.ReadFromJsonAsync<JsonElement>();
+    var renewedToken = renewedSession.GetProperty("bearerToken").GetString()!;
+    if (renewedSession.GetProperty("deviceId").GetGuid() != memberDeviceId ||
+        renewedSession.GetProperty("userId").GetGuid() != memberUserId ||
+        string.IsNullOrWhiteSpace(renewedToken))
+    {
+        Console.Error.WriteLine("FAIL paired-device renewal returned wrong identity");
+        return 1;
+    }
+
+    Console.WriteLine("PASS paired device credential renews a fresh session without re-enrollment");
+
+    memberToken = renewedToken;
     Bearer(memberHttp, memberToken);
 
     var dmResponse = await ownerHttp.PostAsJsonAsync("/api/v1/direct", new { otherUserId = memberUserId });
