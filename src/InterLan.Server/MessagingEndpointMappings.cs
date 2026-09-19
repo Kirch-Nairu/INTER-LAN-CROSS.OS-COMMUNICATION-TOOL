@@ -151,6 +151,7 @@ public static class MessagingEndpointMappings
         });
 
         app.MapGet("/api/v1/direct/summaries", async (
+            bool? includeArchived,
             HttpContext context,
             EnrollmentStore enrollment,
             ChatStore chat,
@@ -166,6 +167,7 @@ public static class MessagingEndpointMappings
                 return Results.Ok(
                     await chat.ListDirectConversationSummariesAsync(
                         principal.UserId,
+                        includeArchived ?? true,
                         cancellationToken));
             }
             catch (UnauthorizedAccessException)
