@@ -486,6 +486,45 @@ try
             .All(value => value),
         "group authority events remain durably ordered");
 
+    Check(
+        events.Any(item =>
+            item.EventType == "GROUP_METADATA_UPDATED" &&
+            item.ActorUserId == adminId) &&
+        events.Any(item =>
+            item.EventType == "MEMBER_ROLE_CHANGED" &&
+            item.SubjectUserId == memberId) &&
+        events.Any(item =>
+            item.EventType == "MEMBER_REMOVED" &&
+            item.SubjectUserId == memberId),
+        "group event history records metadata and authority mutations");
+
+    await using (var auditConnection = database.OpenConnection())
+    {
+        await using var audit = auditConnection.CreateCommand();
+        audit.CommandText =
+            """
+            SELECT event_type
+            FROM audit_events
+            WHERE subject_type = 'GROUP'
+              AND subject_id = $groupId
+            ORDER BY created_utc, audit_event_id;
+            """;
+        audit.Parameters.AddWithValue("$groupId", created.GroupId.ToString("D"));
+
+        var auditTypes = new List<string>();
+        await using var auditReader = await audit.ExecuteReaderAsync();
+        while (await auditReader.ReadAsync())
+            auditTypes.Add(auditReader.GetString(0));
+
+        Check(
+            auditTypes.Contains("GROUP_CREATED") &&
+            auditTypes.Contains("GROUP_METADATA_UPDATED") &&
+            auditTypes.Contains("GROUP_MEMBER_ADDED") &&
+            auditTypes.Contains("GROUP_MEMBER_REMOVED") &&
+            auditTypes.Contains("GROUP_MEMBER_ROLE_CHANGED"),
+            "group authority mutations persist in audit ledger");
+    }
+
     var restartedDatabase = new SqliteDatabase(databasePath);
     await restartedDatabase.InitializeAsync();
     var restartedGroups = new GroupStore(restartedDatabase);
