@@ -1,5 +1,18 @@
+using InterLan.Server;
+using Microsoft.AspNetCore.Http;
+using System.Net;
 using InterLan.Contracts;
 using InterLan.Infrastructure;
+
+var rateContextA = new DefaultHttpContext();
+rateContextA.Connection.RemoteIpAddress = IPAddress.Parse("192.168.10.20");
+var rateContextB = new DefaultHttpContext();
+rateContextB.Connection.RemoteIpAddress = IPAddress.Parse("192.168.10.21");
+
+Check(
+    RateLimitPartitionKeys.RemoteAddress(rateContextA) !=
+    RateLimitPartitionKeys.RemoteAddress(rateContextB),
+    "rate-limit IP partitions isolate distinct clients");
 
 var failures = new List<string>();
 
