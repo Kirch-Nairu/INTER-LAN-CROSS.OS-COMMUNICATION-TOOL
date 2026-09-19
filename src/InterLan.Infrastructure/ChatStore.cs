@@ -6,6 +6,7 @@ namespace InterLan.Infrastructure;
 public sealed class ChatStore(SqliteDatabase database)
 {
     public const int MaxMessageLength = 4_000;
+    public const int MaxMessagePageSize = 200;
 
     public async Task<IReadOnlyList<UserSummaryResponse>> ListUsersAsync(
         Guid actorUserId,
