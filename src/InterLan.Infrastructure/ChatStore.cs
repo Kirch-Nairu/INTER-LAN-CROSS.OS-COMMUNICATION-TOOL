@@ -238,24 +238,6 @@ public sealed class ChatStore(SqliteDatabase database)
             await insert.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await using (var senderReceipt = connection.CreateCommand())
-        {
-            senderReceipt.Transaction = transaction;
-            senderReceipt.CommandText =
-                """
-                INSERT INTO message_receipts (
-                    message_id, user_id, delivered_utc, read_utc
-                ) VALUES ($messageId, $userId, $utc, $utc)
-                ON CONFLICT(message_id, user_id) DO UPDATE SET
-                    delivered_utc = COALESCE(message_receipts.delivered_utc, excluded.delivered_utc),
-                    read_utc = COALESCE(message_receipts.read_utc, excluded.read_utc);
-                """;
-            senderReceipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
-            senderReceipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
-            senderReceipt.Parameters.AddWithValue("$utc", now.ToString("O"));
-            await senderReceipt.ExecuteNonQueryAsync(cancellationToken);
-        }
-
         transaction.Commit();
 
         return new PersistedMessageResult(
