@@ -15,7 +15,7 @@ No fake commits. No whitespace farming. No empty commits.
 
 | Phase | Target | Current | Status |
 | --- | ---: | ---: | --- |
-| P2 | 300+ | 78 commits ahead of accepted main after this ledger update | active — C075 PASS, advancing to C100 |
+| P2 | 300+ | 100 commits ahead of accepted main after this architecture-review commit | active — C100 replay required |
 | P3 | 300+ | 0 | blocked on accepted P2 merge |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
@@ -37,7 +37,7 @@ The two repository-state/ledger commits immediately after that checkpoint are pa
 - C025: passed by implementation history before formal campaign ledger.
 - C050: crossed during structural hardening wave; superseded by immediate C075 local replay.
 - C075: **PASS — operator-local Windows replay at `3a1805fb7c985b83ca72bd2c6f4353abcc435f1e`.**
-- C100: architecture/invariant review after checkpoint repairs and next bounded wave.
+- C100: **ARCHITECTURE REVIEW ISSUED — LOCAL REPLAY REQUIRED.**
 - C125: focused phase checkpoint.
 - C150: restart/persistence/migration replay.
 - C175: focused phase checkpoint.
@@ -73,15 +73,24 @@ C075 is closed.
 - verification solution topology;
 - shared process/network testing foundation.
 
-## Next slices after C075 passes
+## C100 source authority
 
-1. migrate remaining network smoke to shared harness;
-2. concurrency torture;
-3. rate-limit isolation proof;
-4. historical migration fixtures;
+`bc56986096f4e40690f8bb35ebfb3d7666363450`
+
+C075→C100 completed:
+1. shared-harness migration for P1 network smoke;
+2. DM concurrency/idempotency hardening;
+3. rate-limit partition proof;
+4. historical migration fixtures and upgrade checks;
 5. aggregate local suite runner;
-6. in-process desktop owner-host lifecycle proof;
-7. continue P2 toward C100 architecture review.
+6. desktop in-process owner-host lifecycle proof.
+
+C100 replay command:
+`dotnet build InterLan.sln -c Release`
+then
+`dotnet run --project tools/InterLan.SuiteChecks/InterLan.SuiteChecks.csproj -c Release --no-build`
+
+Do not advance into another large wave until this replay is clean.
 
 ## Ledger rule
 

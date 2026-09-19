@@ -93,19 +93,36 @@ The replay proved the current pairing, credential rotation, multi-device identit
 
 Forward implementation is authorized toward the C100 architecture checkpoint.
 
-## P2 remaining structural work after checkpoint
+## C100 architecture checkpoint
 
-- migrate P1 network smoke to the shared process harness;
-- prove rate-limit partition isolation;
-- strengthen SQLite concurrent-write torture tests;
-- prove credential-rotation API persistence/restart behavior end-to-end;
-- complete browser realtime credential policy;
-- continue canonical configuration toward mutable owner settings without split authority;
-- exercise reusable in-process owner server lifecycle from desktop-side tests;
-- add aggregate local suite entrypoint;
-- add migration-upgrade fixtures for accepted historical schemas;
-- define platform secure-storage upgrade path for macOS/Linux;
-- continue P2 correctness hardening toward C100 architecture review.
+C100 source head before this review:
+
+`bc56986096f4e40690f8bb35ebfb3d7666363450`
+
+The C075→C100 wave implemented:
+- P1 network smoke migration to the shared server-process harness;
+- concurrent canonical DM creation checks;
+- concurrent unique-send durability checks;
+- concurrent duplicate-send idempotency checks;
+- conflicting idempotency-key replay rejection;
+- rate-limit partition isolation checks;
+- historical schema fixture support;
+- migration upgrade checks through current schema;
+- desktop in-process owner-host lifecycle checks;
+- aggregate P0–P2 local suite runner.
+
+**C100 local replay is required before the next large wave.**
+
+After C100 passes, remaining P2 work includes:
+- deeper SQLite contention/torture beyond the current concurrency checks;
+- end-to-end rate-limit behavior rather than partition-key unit proof only;
+- browser realtime credential policy;
+- mutable owner settings with explicit restart semantics;
+- migration data-preservation fixtures, not schema-only upgrade proof;
+- secure-storage platform adapters for macOS/Linux;
+- typed client SDK expansion beyond pairing/session restore;
+- DM pagination/conversation projections/unread state;
+- continued correctness hardening toward C125/C150.
 
 ## Deferred
 
