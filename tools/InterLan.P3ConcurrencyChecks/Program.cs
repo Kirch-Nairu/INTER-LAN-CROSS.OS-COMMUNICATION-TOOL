@@ -48,6 +48,7 @@ try
     var sendRaceMemberId = Guid.NewGuid();
     var roleRaceMemberId = Guid.NewGuid();
     var receiptRaceMemberId = Guid.NewGuid();
+    var metadataRaceAdminId = Guid.NewGuid();
 
     await using (var connection = database.OpenConnection())
     {
@@ -59,7 +60,8 @@ try
             (lateMemberId, "p3-late", "P3 Late Member", "MEMBER"),
             (sendRaceMemberId, "p3-send-race", "P3 Send Race", "MEMBER"),
             (roleRaceMemberId, "p3-role-race", "P3 Role Race", "MEMBER"),
-            (receiptRaceMemberId, "p3-receipt-race", "P3 Receipt Race", "MEMBER")
+            (receiptRaceMemberId, "p3-receipt-race", "P3 Receipt Race", "MEMBER"),
+            (metadataRaceAdminId, "p3-metadata-race", "P3 Metadata Race", "MEMBER")
         })
         {
             await using var insert = connection.CreateCommand();
@@ -95,6 +97,58 @@ try
         adminId,
         group.GroupId,
         new AddGroupMemberRequest(memberId));
+
+    var metadataRaceLinearized = true;
+    for (var attempt = 0; attempt < 24; attempt++)
+    {
+        await groups.AddMemberAsync(
+            ownerId,
+            group.GroupId,
+            new AddGroupMemberRequest(metadataRaceAdminId, "ADMIN"));
+
+        var requestedName = $"P3 Metadata Race {attempt:D2}";
+        var removeVsMetadata = await Task.WhenAll(
+            CaptureMutationAsync(async () =>
+            {
+                var updated = await groups.UpdateGroupAsync(
+                    metadataRaceAdminId,
+                    group.GroupId,
+                    new UpdateGroupRequest(requestedName, "metadata authority race"));
+
+                if (updated.Name != requestedName)
+                    throw new InvalidOperationException(
+                        "Committed metadata update returned the wrong snapshot.");
+            }),
+            CaptureMutationAsync(async () =>
+            {
+                await groups.RemoveMemberAsync(
+                    ownerId,
+                    group.GroupId,
+                    metadataRaceAdminId);
+            }));
+
+        var afterMetadataRace = await groups.GetGroupDetailsAsync(
+            ownerId,
+            group.GroupId);
+
+        metadataRaceLinearized &=
+            removeVsMetadata[1] == "SUCCESS" &&
+            removeVsMetadata[0] is "SUCCESS" or "UNAUTHORIZED" &&
+            (removeVsMetadata[0] == "SUCCESS"
+                ? afterMetadataRace.Name == requestedName
+                : afterMetadataRace.Name != requestedName) &&
+            afterMetadataRace.Members.All(member =>
+                member.UserId != metadataRaceAdminId);
+
+        await groups.UpdateGroupAsync(
+            ownerId,
+            group.GroupId,
+            new UpdateGroupRequest("P3 Concurrency"));
+    }
+
+    Check(
+        metadataRaceLinearized,
+        "remove-vs-metadata update never commits behind an unauthorized result");
 
     var senders = new[] { ownerId, adminId, memberId };
 
