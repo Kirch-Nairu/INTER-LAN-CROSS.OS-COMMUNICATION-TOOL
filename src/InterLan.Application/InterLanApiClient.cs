@@ -634,6 +634,55 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Group message page response was empty.");
     }
 
+    public async Task<IReadOnlyList<MessageReceiptResponse>> MarkGroupMessageDeliveredAsync(
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            $"/api/v1/groups/{groupId:D}/messages/{messageId:D}/delivered",
+            content: null,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageReceiptResponse[]>(
+            cancellationToken: cancellationToken)
+            ?? Array.Empty<MessageReceiptResponse>();
+    }
+
+    public async Task<IReadOnlyList<MessageReceiptResponse>> MarkGroupMessageReadAsync(
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            $"/api/v1/groups/{groupId:D}/messages/{messageId:D}/read",
+            content: null,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageReceiptResponse[]>(
+            cancellationToken: cancellationToken)
+            ?? Array.Empty<MessageReceiptResponse>();
+    }
+
+    public async Task<IReadOnlyList<MessageReceiptResponse>> GetGroupMessageReceiptsAsync(
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<MessageReceiptResponse[]>(
+            $"/api/v1/groups/{groupId:D}/messages/{messageId:D}/receipts",
+            cancellationToken)
+            ?? Array.Empty<MessageReceiptResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
