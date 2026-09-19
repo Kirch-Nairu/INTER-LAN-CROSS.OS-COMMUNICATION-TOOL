@@ -172,6 +172,27 @@ try
     await store.RevokeSessionAsync(owner.OwnerUserId, ownerSession.SessionId);
     var revokedOwner = await store.ValidateSessionAsync(ownerSession.BearerToken);
     Check(revokedOwner is null, "explicit owner-authorized session revocation invalidates token");
+
+    await using (var connection = database.OpenConnection())
+    {
+        await using var audit = connection.CreateCommand();
+        audit.CommandText =
+            """
+            SELECT COUNT(1)
+            FROM audit_events
+            WHERE event_type IN (
+                'SERVER_BOOTSTRAPPED',
+                'INVITE_CREATED',
+                'JOIN_REQUESTED',
+                'JOIN_APPROVED',
+                'SESSION_CREATED',
+                'DEVICE_REVOKED',
+                'SESSION_REVOKED'
+            );
+            """;
+        var auditCount = Convert.ToInt64(await audit.ExecuteScalarAsync());
+        Check(auditCount >= 7, "identity/enrollment security events are auditable");
+    }
 }
 finally
 {
