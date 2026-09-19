@@ -397,6 +397,120 @@ try
             Guid.NewGuid(),
             "secondary group message"));
 
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.GetGroupDetailsAsync(
+                adminId,
+                secondGroup.GroupId);
+        },
+        "non-member cannot read another group detail");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.GetGroupHistoryAsync(
+                adminId,
+                secondGroup.GroupId,
+                afterMessageId: null,
+                limit: 100);
+        },
+        "non-member cannot read another group history");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.GetGroupMessageByIdAsync(
+                adminId,
+                secondGroup.GroupId,
+                secondGroupMessage.Message.MessageId);
+        },
+        "non-member cannot read another group message by ID");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.GetGroupMessageReceiptsAsync(
+                adminId,
+                secondGroup.GroupId,
+                secondGroupMessage.Message.MessageId);
+        },
+        "non-member cannot read another group receipts");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.ListGroupEventsAsync(
+                adminId,
+                secondGroup.GroupId,
+                limit: 100);
+        },
+        "non-member cannot read another group events");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                adminId,
+                secondGroup.GroupId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    "non-member send"));
+        },
+        "non-member cannot send to another group");
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.GetGroupMessageByIdAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupMessage.Message.MessageId);
+        },
+        "message ID from another authorized group cannot cross group detail scope");
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.GetGroupMessageReceiptsAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupMessage.Message.MessageId);
+        },
+        "message ID from another authorized group cannot cross receipt scope");
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.EditGroupMessageAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupMessage.Message.MessageId,
+                new EditMessageRequest("cross-group edit"));
+        },
+        "message ID from another authorized group cannot cross edit scope");
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.DeleteGroupMessageAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupMessage.Message.MessageId);
+        },
+        "message ID from another authorized group cannot cross delete scope");
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.GetGroupRecentHistoryPageAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupMessage.Message.MessageId,
+                limit: 50);
+        },
+        "recent-history cursor from another authorized group is rejected");
+
     await ExpectKeyNotFoundAsync(
         async () =>
         {
