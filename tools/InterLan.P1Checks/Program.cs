@@ -123,6 +123,9 @@ try
 
     Check(join.Status == "PENDING", "valid invite creates pending join request");
 
+    var pending = await store.ListPendingJoinsAsync(owner.OwnerUserId);
+    Check(pending.Count == 1 && pending[0].RequestId == join.RequestId, "owner can enumerate pending join requests");
+
     var reusedInviteRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
         store.SubmitJoinAsync(new SubmitJoinRequest(
             invite.InviteToken,
@@ -135,6 +138,9 @@ try
 
     var decision = await store.DecideJoinAsync(owner.OwnerUserId, join.RequestId, approve: true);
     Check(decision.Status == "APPROVED" && decision.DeviceId is not null && decision.UserId is not null, "owner approval creates member and device");
+
+    var devices = await store.ListDevicesAsync(owner.OwnerUserId);
+    Check(devices.Count == 1 && devices[0].DeviceId == decision.DeviceId, "owner can enumerate approved devices");
 
     var memberSession = await store.ExchangeApprovedJoinAsync(
         join.RequestId,
@@ -167,7 +173,44 @@ try
     var ownerPrincipal = await store.ValidateSessionAsync(ownerSession.BearerToken);
     Check(ownerPrincipal is not null && ownerPrincipal.Role == "OWNER", "owner session remains valid after member revocation");
 
+    var expiredInvite = await store.CreateInviteAsync(owner.OwnerUserId, TimeSpan.FromMinutes(5));
+    await using (var connection = database.OpenConnection())
+    {
+        await using var expire = connection.CreateCommand();
+        expire.CommandText = "UPDATE invite_tokens SET expires_utc = $past WHERE invite_id = $id;";
+        expire.Parameters.AddWithValue("$past", DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"));
+        expire.Parameters.AddWithValue("$id", expiredInvite.InviteId.ToString("D"));
+        await expire.ExecuteNonQueryAsync();
+    }
+
+    var expiredRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
+        store.SubmitJoinAsync(new SubmitJoinRequest(
+            expiredInvite.InviteToken,
+            "expired-user",
+            "Expired User",
+            "Expired Device",
+            "test",
+            SecretCodec.NewToken())));
+    Check(expiredRejected, "expired invite is rejected");
+
+    var rejectInvite = await store.CreateInviteAsync(owner.OwnerUserId, TimeSpan.FromMinutes(30));
+    var rejectJoin = await store.SubmitJoinAsync(new SubmitJoinRequest(
+        rejectInvite.InviteToken,
+        "rejected-user",
+        "Rejected User",
+        "Rejected Device",
+        "test",
+        SecretCodec.NewToken()));
+    var rejectedDecision = await store.DecideJoinAsync(owner.OwnerUserId, rejectJoin.RequestId, approve: false);
+    Check(rejectedDecision.Status == "REJECTED", "owner can reject pending join request");
+
     Check(await store.IsDiscoveryEnabledAsync(), "persisted discovery policy is enabled");
+
+    var reopenedDatabase = new SqliteDatabase(Path.Combine(root, "p1.db"));
+    await reopenedDatabase.InitializeAsync();
+    var reopenedIdentityStore = new SqliteServerIdentityStore(reopenedDatabase);
+    var reopenedIdentity = await reopenedIdentityStore.GetAsync();
+    Check(reopenedIdentity == owner, "restart preserves canonical server identity");
 
     await store.RevokeSessionAsync(owner.OwnerUserId, ownerSession.SessionId);
     var revokedOwner = await store.ValidateSessionAsync(ownerSession.BearerToken);
@@ -185,13 +228,14 @@ try
                 'INVITE_CREATED',
                 'JOIN_REQUESTED',
                 'JOIN_APPROVED',
+                'JOIN_REJECTED',
                 'SESSION_CREATED',
                 'DEVICE_REVOKED',
                 'SESSION_REVOKED'
             );
             """;
         var auditCount = Convert.ToInt64(await audit.ExecuteScalarAsync());
-        Check(auditCount >= 7, "identity/enrollment security events are auditable");
+        Check(auditCount >= 10, "identity/enrollment security events are auditable");
     }
 }
 finally
