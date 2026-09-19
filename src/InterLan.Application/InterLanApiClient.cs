@@ -192,6 +192,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Deleted message response was empty.");
     }
 
+    public async Task<ServerSettingsSnapshotResponse> GetServerSettingsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<ServerSettingsSnapshotResponse>(
+            "/api/v1/server/settings",
+            cancellationToken)
+            ?? throw new InvalidDataException("Server settings response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
