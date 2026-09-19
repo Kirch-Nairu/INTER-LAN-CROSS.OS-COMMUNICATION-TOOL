@@ -90,6 +90,35 @@ public static class EnrollmentEndpointMappings
             }
         });
         
+        app.MapPost("/api/v1/auth/sessions/revoke-others", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            RealtimeConnectionRegistry realtimeConnections,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                var revoked = await enrollment.RevokeOtherSessionsAsync(
+                    principal.UserId,
+                    principal.SessionId,
+                    cancellationToken);
+
+                foreach (var sessionId in revoked)
+                    realtimeConnections.RevokeSession(sessionId);
+
+                return Results.Ok(new RevokeOtherSessionsResponse(revoked.Count));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+
         app.MapPost("/api/v1/auth/sessions/{sessionId:guid}/revoke", async (
             Guid sessionId,
             HttpContext context,
