@@ -125,6 +125,26 @@ try
         memberAdded.Status == "ADDED" && memberAdded.Role == "MEMBER",
         "admin can add a member");
 
+    var adminUpdated = await groups.UpdateGroupAsync(
+        adminId,
+        created.GroupId,
+        new UpdateGroupRequest("  Operations Core  ", "  Active P3 topic  "));
+
+    Check(
+        adminUpdated.Name == "Operations Core" &&
+        adminUpdated.Topic == "Active P3 topic",
+        "group admin can update normalized group metadata");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.UpdateGroupAsync(
+                memberId,
+                created.GroupId,
+                new UpdateGroupRequest("Member Override", null));
+        },
+        "group member cannot mutate group metadata");
+
     var duplicateMember = await groups.AddMemberAsync(
         adminId,
         created.GroupId,
