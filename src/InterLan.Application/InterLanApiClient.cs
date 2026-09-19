@@ -426,6 +426,23 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Unread summary response was empty.");
     }
 
+    public async Task<RevokeOtherSessionsResponse> RevokeOtherSessionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            "/api/v1/auth/sessions/revoke-others",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<RevokeOtherSessionsResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Revoke-other-sessions response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
