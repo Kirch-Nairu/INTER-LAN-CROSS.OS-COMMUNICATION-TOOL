@@ -149,6 +149,39 @@ public static class MessagingEndpointMappings
             }
         });
         
+        app.MapGet("/api/v1/direct/{conversationId:guid}/messages/recent", async (
+            Guid conversationId,
+            Guid? beforeMessageId,
+            int? limit,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            ChatStore chat,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                return Results.Ok(await chat.GetDirectRecentHistoryPageAsync(
+                    principal.UserId,
+                    conversationId,
+                    beforeMessageId,
+                    Math.Clamp(limit ?? 50, 1, ChatStore.MaxMessagePageSize),
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+        });
+        
         app.MapGet("/api/v1/direct/{conversationId:guid}/messages/page", async (
             Guid conversationId,
             Guid? afterMessageId,
