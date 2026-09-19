@@ -391,7 +391,7 @@ public sealed class ChatStore(SqliteDatabase database)
                 Guid.Parse(reader.GetString(0)),
                 DateTimeOffset.Parse(reader.GetString(1)),
                 reader.IsDBNull(2) ? null : Guid.Parse(reader.GetString(2)),
-                reader.GetInt32(3)));
+                checked((int)reader.GetInt64(3))));
         }
 
         return rows;
