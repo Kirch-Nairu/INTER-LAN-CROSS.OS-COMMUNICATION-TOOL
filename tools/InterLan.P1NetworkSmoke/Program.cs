@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -61,14 +62,18 @@ process.Start();
 process.BeginOutputReadLine();
 process.BeginErrorReadLine();
 
-using var handler = new HttpClientHandler
+using var handler = new SocketsHttpHandler
 {
     UseProxy = false,
-    ServerCertificateCustomValidationCallback = (_, _, _, _) => true
+    ConnectTimeout = TimeSpan.FromSeconds(2),
+    SslOptions = new SslClientAuthenticationOptions
+    {
+        RemoteCertificateValidationCallback = (_, _, _, _) => true
+    }
 };
 using var client = new HttpClient(handler)
 {
-    Timeout = TimeSpan.FromSeconds(1)
+    Timeout = TimeSpan.FromSeconds(3)
 };
 
 var probeBases = new[]
@@ -80,8 +85,42 @@ Uri? activeBase = null;
 
 try
 {
+    var tcpReady = false;
+    string? tcpFailure = null;
+
+    for (var attempt = 0; attempt < 40; attempt++)
+    {
+        if (process.HasExited)
+            break;
+
+        try
+        {
+            using var tcp = new TcpClient(AddressFamily.InterNetwork);
+            await tcp.ConnectAsync(IPAddress.Loopback, port).WaitAsync(TimeSpan.FromSeconds(1));
+            tcpReady = true;
+            break;
+        }
+        catch (Exception exception)
+        {
+            tcpFailure = $"{exception.GetType().Name}: {exception.Message}";
+            await Task.Delay(250);
+        }
+    }
+
+    if (!tcpReady)
+    {
+        Console.Error.WriteLine($"FAIL TCP loopback did not become reachable on 127.0.0.1:{port}. LastError={tcpFailure}");
+        foreach (var line in output.TakeLast(40)) Console.Error.WriteLine($"SERVER OUT: {line}");
+        foreach (var line in errors.TakeLast(40)) Console.Error.WriteLine($"SERVER ERR: {line}");
+        return 1;
+    }
+
+    Console.WriteLine($"PASS TCP loopback 127.0.0.1:{port}");
+
     var ready = false;
-    for (var attempt = 0; attempt < 30; attempt++)
+    var probeFailures = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    for (var attempt = 0; attempt < 20; attempt++)
     {
         if (process.HasExited)
             break;
@@ -97,10 +136,13 @@ try
                     ready = true;
                     break;
                 }
+
+                probeFailures[candidateBase.ToString()] = $"HTTP {(int)health.StatusCode}";
             }
-            catch
+            catch (Exception exception)
             {
-                // Try the next loopback family/name while the server is starting.
+                probeFailures[candidateBase.ToString()] =
+                    $"{exception.GetType().Name}: {exception.GetBaseException().Message}";
             }
         }
 
@@ -113,6 +155,8 @@ try
     if (!ready)
     {
         Console.Error.WriteLine($"FAIL HTTPS server did not become healthy on port {port}. ProcessExited={process.HasExited} ExitCode={(process.HasExited ? process.ExitCode : -1)}");
+        foreach (var failure in probeFailures)
+            Console.Error.WriteLine($"PROBE {failure.Key}: {failure.Value}");
         foreach (var line in output.TakeLast(40)) Console.Error.WriteLine($"SERVER OUT: {line}");
         foreach (var line in errors.TakeLast(40)) Console.Error.WriteLine($"SERVER ERR: {line}");
         return 1;
