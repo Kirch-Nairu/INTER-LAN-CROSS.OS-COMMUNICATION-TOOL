@@ -305,6 +305,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Recent message page response was empty.");
     }
 
+    public async Task<IReadOnlyList<DirectConversationActivityResponse>> ListDirectConversationActivityAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<DirectConversationActivityResponse[]>(
+            "/api/v1/direct/activity",
+            cancellationToken)
+            ?? Array.Empty<DirectConversationActivityResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
