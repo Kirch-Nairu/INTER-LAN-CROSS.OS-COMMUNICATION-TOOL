@@ -184,8 +184,7 @@ public sealed class ChatStore(SqliteDatabase database)
 
         if (existing is not null)
         {
-            if (existing.ScopeType != "DIRECT" || existing.ScopeId != conversationId)
-                throw new InvalidOperationException("ClientMessageId was already used for another message.");
+            EnsureIdempotentReplayMatches(existing, conversationId, body, request.ReplyToMessageId);
 
             transaction.Commit();
             return new PersistedMessageResult(existing, false);
@@ -250,12 +249,11 @@ public sealed class ChatStore(SqliteDatabase database)
                 ?? throw new InvalidOperationException(
                     "Message idempotency conflict could not be resolved.");
 
-            if (concurrentExisting.ScopeType != "DIRECT" ||
-                concurrentExisting.ScopeId != conversationId)
-            {
-                throw new InvalidOperationException(
-                    "ClientMessageId was already used for another message.");
-            }
+            EnsureIdempotentReplayMatches(
+                concurrentExisting,
+                conversationId,
+                body,
+                request.ReplyToMessageId);
 
             transaction.Commit();
             return new PersistedMessageResult(concurrentExisting, false);
@@ -485,6 +483,22 @@ public sealed class ChatStore(SqliteDatabase database)
         return (
             Guid.Parse(reader.GetString(0)),
             Guid.Parse(reader.GetString(1)));
+    }
+
+    private static void EnsureIdempotentReplayMatches(
+        MessageResponse existing,
+        Guid conversationId,
+        string body,
+        Guid? replyToMessageId)
+    {
+        if (existing.ScopeType != "DIRECT" ||
+            existing.ScopeId != conversationId ||
+            !string.Equals(existing.Body, body, StringComparison.Ordinal) ||
+            existing.ReplyToMessageId != replyToMessageId)
+        {
+            throw new InvalidOperationException(
+                "ClientMessageId was already used with different message content.");
+        }
     }
 
     private static string PairKey(Guid left, Guid right)
