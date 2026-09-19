@@ -378,6 +378,23 @@ try
         carolUnreadAfterPartial.UnreadCount == 17,
         "partial conversation read advance preserves later unread messages");
 
+    var fullRead = await chat.MarkConversationReadAsync(
+        carol,
+        ac.ConversationId,
+        upToMessageId: null);
+
+    Check(
+        fullRead.MarkedCount == 17,
+        "conversation read-all advances remaining recipient messages");
+
+    var carolUnreadAfterFull =
+        (await chat.ListDirectConversationSummariesAsync(carol))
+        .Single(summary => summary.ConversationId == ac.ConversationId);
+
+    Check(
+        carolUnreadAfterFull.UnreadCount == 0,
+        "conversation read-all clears unread projection");
+
     var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
     await reopened.InitializeAsync();
     var reopenedChat = new ChatStore(reopened);
