@@ -869,6 +869,39 @@ public sealed class GroupStore(SqliteDatabase database)
             hasMore);
     }
 
+    public async Task<IReadOnlyList<Guid>> GetActiveGroupMemberIdsAsync(
+        Guid actorUserId,
+        Guid groupId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT gm.user_id
+            FROM group_members gm
+            JOIN users u ON u.user_id = gm.user_id
+            WHERE gm.group_id = $groupId
+              AND gm.removed_utc IS NULL
+              AND u.disabled_utc IS NULL
+            ORDER BY gm.user_id;
+            """;
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+        var members = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            members.Add(Guid.Parse(reader.GetString(0)));
+
+        return members;
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
