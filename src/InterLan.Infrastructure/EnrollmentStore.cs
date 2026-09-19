@@ -751,11 +751,11 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             DateTimeOffset.Parse(reader.GetString(3)));
 
         await reader.DisposeAsync();
-        await using var touch = connection.CreateCommand();
-        touch.CommandText = "UPDATE device_sessions SET last_seen_utc = $utc WHERE session_id = $id;";
-        touch.Parameters.AddWithValue("$utc", now.ToString("O"));
-        touch.Parameters.AddWithValue("$id", principal.SessionId.ToString("D"));
-        await touch.ExecuteNonQueryAsync(cancellationToken);
+        await TouchSessionActivityAsync(
+            connection,
+            principal,
+            now,
+            cancellationToken);
         return principal;
     }
 
