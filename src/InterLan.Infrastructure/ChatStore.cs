@@ -406,6 +406,39 @@ public sealed class ChatStore(SqliteDatabase database)
         await receipt.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<MessageReceiptResponse>> GetReceiptsAsync(
+        Guid actorUserId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        var target = await GetDirectReceiptTargetAsync(connection, messageId, cancellationToken);
+        await RequireDirectMembershipAsync(connection, actorUserId, target.ConversationId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT message_id, user_id, delivered_utc, read_utc
+            FROM message_receipts
+            WHERE message_id = $messageId
+            ORDER BY user_id;
+            """;
+        command.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+
+        var receipts = new List<MessageReceiptResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            receipts.Add(new MessageReceiptResponse(
+                Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)),
+                reader.IsDBNull(2) ? null : DateTimeOffset.Parse(reader.GetString(2)),
+                reader.IsDBNull(3) ? null : DateTimeOffset.Parse(reader.GetString(3))));
+        }
+
+        return receipts;
+    }
+
     private static async Task<(Guid ConversationId, Guid SenderUserId)> GetDirectReceiptTargetAsync(
         SqliteConnection connection,
         Guid messageId,
