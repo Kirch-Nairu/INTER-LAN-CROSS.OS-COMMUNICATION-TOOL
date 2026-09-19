@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../InterLan.Application/InterLan.Application.csproj" />
+    <ProjectReference Include="../InterLan.Contracts/InterLan.Contracts.csproj" />
     <ProjectReference Include="../InterLan.Domain/InterLan.Domain.csproj" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
   </ItemGroup>

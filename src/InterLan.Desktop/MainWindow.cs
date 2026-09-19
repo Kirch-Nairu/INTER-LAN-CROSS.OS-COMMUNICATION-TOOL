@@ -32,6 +32,13 @@ public sealed class MainWindow : Window
             Opacity = 0.72
         };
 
+        _status = new TextBlock
+        {
+            Text = "Choose a runtime direction. P0 does not perform network enrollment yet.",
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.8
+        };
+
         var createServer = new Button
         {
             Content = "Create Server",
@@ -49,13 +56,6 @@ public sealed class MainWindow : Window
         };
         joinServer.Click += (_, _) =>
             _status.Text = "Client discovery/join is intentionally staged for P1. The native client boundary is active.";
-
-        _status = new TextBlock
-        {
-            Text = "Choose a runtime direction. P0 does not perform network enrollment yet.",
-            TextWrapping = TextWrapping.Wrap,
-            Opacity = 0.8
-        };
 
         var panel = new StackPanel
         {

@@ -6,33 +6,43 @@ Native-first LAN communication platform with configurable server ownership, nati
 
 Technical Authority: **Kirch Ivan Balite**
 
-Planning authority: GitHub Issue #1.
+Overall V1 plan: GitHub Issue #1.
 
-Active implementation branch: `KIRCH-INTERLAN-P0-FOUNDATION`
+Accepted P0 authority:
+`main@8216a327c7c30b82866bd42af444bd10c868c0bf`
 
-## P0 — Architecture/Foundation
+Active implementation branch:
+`KIRCH-INTERLAN-P1-LAN-IDENTITY`
 
-The current bounded phase establishes:
+## P1 — LAN Connectivity and Identity
 
-- .NET 10 solution structure;
-- Avalonia 12 native desktop shell;
-- ASP.NET Core owner-server runtime;
-- shared versioned transport contracts;
-- SQLite schema + embedded migration runner;
-- explicit singleton server identity and owner authority;
-- durable runtime configuration model;
-- responsive React web-client shell for Android;
-- foundation checks;
-- Windows/Linux/macOS CI.
+P1 adds:
 
-Messaging, group chat, file transfer, and Telegram archival are intentionally deferred to later phases.
+- persistent owner-host TLS identity;
+- stable SHA-256 certificate fingerprint;
+- HTTPS Kestrel server;
+- UDP multicast LAN discovery plus manual-address fallback;
+- one-time loopback owner bootstrap;
+- PBKDF2 owner authentication;
+- one-use hashed invite tokens;
+- pending join requests;
+- explicit owner approval/rejection;
+- approved member/device creation;
+- one-use enrollment-secret exchange;
+- hashed bearer sessions;
+- device/session revocation;
+- server-side audit events.
 
-## Local validation
+Android remains a responsive web client served by the owner server. It cannot host or become the canonical server.
+
+P1 intentionally does **not** implement direct messages, group chat, file transfer, or Telegram archival.
+
+## P1 validation
 
 ```bash
 dotnet restore InterLan.sln
 dotnet build InterLan.sln -c Release
-dotnet run --project tools/InterLan.FoundationChecks/InterLan.FoundationChecks.csproj -c Release --no-build
+dotnet run --project tools/InterLan.P1Checks/InterLan.P1Checks.csproj -c Release
 ```
 
 Web shell:
@@ -43,16 +53,14 @@ npm install
 npm run build
 ```
 
-The web build writes into `src/InterLan.Server/wwwroot/client` so the owner server hosts the Android/browser client.
-
-Run the server:
+## Local server
 
 ```bash
 dotnet run --project src/InterLan.Server/InterLan.Server.csproj
 ```
 
-Then open `/client/` on the server address.
+Default HTTPS port is `7443`.
 
-## Current security boundary
+The owner server creates `server-cert.pem` and `server-key.pem` under its data directory if they do not already exist. Native clients should pin the advertised SHA-256 fingerprint after explicit pairing.
 
-P0 does not claim production TLS, E2E encryption, enrollment, or Telegram archival. Those are later bounded phases. Server ownership is already represented as explicit durable state and is never inferred from a connected client.
+The Android/browser client may require the local certificate to be explicitly trusted/accepted by the user. P1 does not claim public-CA trust.

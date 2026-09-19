@@ -1,0 +1,41 @@
+name: P1 LAN Identity
+
+on:
+  push:
+    branches:
+      - KIRCH-INTERLAN-P1-LAN-IDENTITY
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  p1:
+    name: P1 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore InterLan.sln
+      - run: dotnet build InterLan.sln --configuration Release --no-restore
+      - run: dotnet run --project tools/InterLan.P1Checks/InterLan.P1Checks.csproj --configuration Release
+      - run: dotnet run --project tools/InterLan.P1NetworkSmoke/InterLan.P1NetworkSmoke.csproj --configuration Release
+
+  web:
+    name: P1 Android web-client compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - working-directory: web-client
+        run: npm install
+      - working-directory: web-client
+        run: npm run build
+      - run: test -f src/InterLan.Server/wwwroot/client/index.html
