@@ -152,6 +152,43 @@ public sealed class GroupStore(SqliteDatabase database)
             members);
     }
 
+    private static async Task AppendGroupEventAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid groupId,
+        Guid? actorUserId,
+        Guid? subjectUserId,
+        string eventType,
+        string payloadJson,
+        DateTimeOffset createdUtc,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            INSERT INTO group_events (
+                group_event_id, group_id, actor_user_id,
+                subject_user_id, event_type, payload_json, created_utc
+            ) VALUES (
+                $eventId, $groupId, $actorUserId,
+                $subjectUserId, $eventType, $payloadJson, $createdUtc
+            );
+            """;
+        command.Parameters.AddWithValue("$eventId", Guid.NewGuid().ToString("D"));
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$actorUserId",
+            actorUserId is null ? DBNull.Value : actorUserId.Value.ToString("D"));
+        command.Parameters.AddWithValue(
+            "$subjectUserId",
+            subjectUserId is null ? DBNull.Value : subjectUserId.Value.ToString("D"));
+        command.Parameters.AddWithValue("$eventType", eventType);
+        command.Parameters.AddWithValue("$payloadJson", payloadJson);
+        command.Parameters.AddWithValue("$createdUtc", createdUtc.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task RequireActiveUserAsync(
         SqliteConnection connection,
         Guid userId,
