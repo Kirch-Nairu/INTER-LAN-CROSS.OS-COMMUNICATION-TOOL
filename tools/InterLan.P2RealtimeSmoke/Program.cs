@@ -349,6 +349,39 @@ try
     }
 
     Console.WriteLine("PASS duplicate HTTP send does not duplicate persistence");
+
+    await using var revokedHub = CreateHub(baseUri, memberToken);
+    var revokedHubClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+    revokedHub.Closed += _ =>
+    {
+        revokedHubClosed.TrySetResult(true);
+        return Task.CompletedTask;
+    };
+    await revokedHub.StartAsync();
+
+    using var revokeDevice = await ownerHttp.PostAsync(
+        $"/api/v1/devices/{memberDeviceId:D}/revoke",
+        content: null);
+
+    if (!revokeDevice.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine($"FAIL device revocation {(int)revokeDevice.StatusCode}: {await revokeDevice.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    await revokedHubClosed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Console.WriteLine("PASS device revocation aborts an already-connected realtime session");
+
+    using var revokedHistory = await memberHttp.GetAsync(
+        $"/api/v1/direct/{conversationId:D}/messages?limit=100");
+
+    if (revokedHistory.StatusCode != HttpStatusCode.Unauthorized)
+    {
+        Console.Error.WriteLine($"FAIL revoked device retained HTTP authority: {(int)revokedHistory.StatusCode}");
+        return 1;
+    }
+
+    Console.WriteLine("PASS device revocation removes HTTP authority immediately");
     Console.WriteLine("INTER-LAN P2 REALTIME SMOKE: PASS");
     return 0;
 }
