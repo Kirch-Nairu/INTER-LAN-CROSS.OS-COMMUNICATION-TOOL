@@ -63,3 +63,11 @@ public sealed record MessageDeletedResponse(
     Guid MessageId,
     Guid ConversationId,
     DateTimeOffset DeletedUtc);
+
+public sealed record MarkConversationReadRequest(
+    Guid? UpToMessageId = null);
+
+public sealed record ConversationReadResponse(
+    Guid ConversationId,
+    int MarkedCount,
+    DateTimeOffset ReadUtc);
