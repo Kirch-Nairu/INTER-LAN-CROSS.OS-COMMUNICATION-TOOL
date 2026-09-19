@@ -189,6 +189,37 @@ public sealed class GroupStore(SqliteDatabase database)
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static async Task AppendAuditAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        Guid actorUserId,
+        string eventType,
+        Guid groupId,
+        string payloadJson,
+        DateTimeOffset createdUtc,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            INSERT INTO audit_events (
+                audit_event_id, actor_user_id, event_type,
+                subject_type, subject_id, payload_json, created_utc
+            ) VALUES (
+                $auditId, $actorUserId, $eventType,
+                'GROUP', $groupId, $payloadJson, $createdUtc
+            );
+            """;
+        command.Parameters.AddWithValue("$auditId", Guid.NewGuid().ToString("D"));
+        command.Parameters.AddWithValue("$actorUserId", actorUserId.ToString("D"));
+        command.Parameters.AddWithValue("$eventType", eventType);
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+        command.Parameters.AddWithValue("$payloadJson", payloadJson);
+        command.Parameters.AddWithValue("$createdUtc", createdUtc.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private static async Task RequireActiveUserAsync(
         SqliteConnection connection,
         Guid userId,
