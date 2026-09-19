@@ -78,21 +78,20 @@ P3 issue:
 - native realtime test transport now prefers Authorization header over query token;
 - framework request-start logging suppressed to reduce browser access-token log exposure.
 
-## Immediate checkpoint
+## C075 checkpoint result
 
-The branch crossed the C050 boundary and reached the C075 neighborhood before this state update.
+**PASS — operator-local Windows replay at `3a1805fb7c985b83ca72bd2c6f4353abcc435f1e`.**
 
-**Do not begin another large wave until the local C075 checkpoint is replayed.**
-
-Required local checkpoint:
-
+Passed:
 1. `dotnet build InterLan.sln -c Release`
 2. `InterLan.P1Checks`
 3. `InterLan.P1NetworkSmoke`
 4. `InterLan.P2Checks`
 5. `InterLan.P2RealtimeSmoke`
 
-Any source/compiler/security/persistence failure found by this checkpoint is fixed before continuing.
+The replay proved the current pairing, credential rotation, multi-device identity, SQLite WAL policy, recipient receipt semantics, DM persistence, realtime delivery, offline catch-up, and immediate revocation paths on Windows.
+
+Forward implementation is authorized toward the C100 architecture checkpoint.
 
 ## P2 remaining structural work after checkpoint
 
