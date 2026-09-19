@@ -286,6 +286,14 @@ try
         bobUnreadAggregate.ConversationsWithUnread == 1,
         "direct unread aggregate tracks unread messages and conversations");
 
+    await chat.UpdateDirectConversationPreferenceAsync(
+        bob,
+        ab1.ConversationId,
+        new UpdateDirectConversationPreferenceRequest(
+            IsPinned: true,
+            MutedUntilUtc: bobMuteUntil,
+            IsArchived: false));
+
     var bobBeforeReadSummaries =
         await chat.ListDirectConversationSummariesAsync(bob);
     var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
