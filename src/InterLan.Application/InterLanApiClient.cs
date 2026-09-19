@@ -347,6 +347,23 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Direct conversation preference response was empty.");
     }
 
+    public async Task<DirectMessageSearchResponse> SearchDirectMessagesAsync(
+        Guid conversationId,
+        string query,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        var path =
+            $"/api/v1/direct/{conversationId:D}/search?q={Uri.EscapeDataString(query)}&limit={limit}";
+
+        return await _httpClient.GetFromJsonAsync<DirectMessageSearchResponse>(
+            path,
+            cancellationToken)
+            ?? throw new InvalidDataException("Direct message search response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
