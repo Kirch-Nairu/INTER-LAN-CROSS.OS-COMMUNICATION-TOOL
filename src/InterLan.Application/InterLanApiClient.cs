@@ -254,6 +254,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
         _httpClient.DefaultRequestHeaders.Authorization = null;
     }
 
+    public async Task<IReadOnlyList<SessionSummaryResponse>> ListSessionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<SessionSummaryResponse[]>(
+            "/api/v1/auth/sessions",
+            cancellationToken)
+            ?? Array.Empty<SessionSummaryResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
