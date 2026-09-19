@@ -28,7 +28,7 @@ Group receipts must preserve recipient-only delivered/read semantics and current
 
 ## R7 — SQLite concurrency and group authority races
 
-**ACTIVE HIGH-PRIORITY P3 RISK**
+**SOURCE HARDENED — EXECUTABLE VERIFICATION PENDING**
 
 Attack:
 - concurrent membership add/restore;
@@ -38,7 +38,15 @@ Attack:
 - concurrent receipt upserts;
 - history reads during writes.
 
-Required outcome:
+Source mitigation at `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220`:
+- group mutations acquire non-deferred SQLite write transactions before authority reads;
+- receipt writes share the same authority transaction;
+- post-commit realtime delivery targets do not re-authorize the already-committed actor;
+- concurrency checks cover add/restore, remove-vs-send, remove-vs-role, and remove-vs-receipt.
+
+Required remaining evidence:
+- executable P3 concurrency run;
+- realtime smoke after the fan-out change;
 - no duplicate authority;
 - no stale authorization;
 - no uncaught lock race treated as success;
@@ -81,6 +89,8 @@ Current P3 keeps creator OWNER immutable through ordinary remove/role mutation. 
 Current contract authorizes current active members to read group history. No "history only since join" rule exists. Do not invent one silently.
 
 ## R17 — Governance drift
+
+**CORRECTED IN PRODUCT-REPO STRUCTURE; CONTINUITY MUST STAY CURRENT**
 
 A P3 implementation wave advanced while old P2 state files remained stale. A subsequent correction mistakenly imported `.forge/` product memory from the wrong Forge repository.
 

@@ -79,9 +79,28 @@ Implemented source surfaces include:
 - P3 concurrency: NOT RUN in the governance correction
 - acceptance: NOT GRANTED
 
+## Latest P3 authority-race wave
+
+Code anchor: `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220`
+
+Observed branch relationship at that anchor:
+- ahead of main: 81 commits
+- behind main: 0
+
+Implemented in source:
+- non-deferred write transactions for group mutations;
+- receipt membership authorization + write in the same transaction;
+- server-internal delivery target projection for post-commit fan-out;
+- removal of post-commit actor reauthorization from group send/edit/delete/receipt realtime fan-out;
+- add/restore/remove/send/role/receipt concurrency regression coverage.
+
+Static brace/call-pattern inspection of touched P3 files: SOURCE INSPECTED ONLY.
+
+Executable P3 build/tests: NOT RUN here because the environment has no .NET SDK.
+
 ## Current next work
 
-Harden membership/write concurrency and authorization races, then extend regression checks without expanding beyond P3.
+Continue auditing P3 exit conditions for remaining authorization/persistence gaps. Keep the phase open until repository-native executable gates are actually observed.
 
 ## Deferred
 

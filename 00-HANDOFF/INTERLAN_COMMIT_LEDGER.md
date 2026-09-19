@@ -16,7 +16,7 @@ No fake commits. No whitespace farming. No empty commits.
 
 | Phase | Target | Observed baseline | Status |
 | --- | ---: | ---: | --- |
-| P3 | 300+ meaningful | 65 commits ahead of accepted main at `939fa64e...` before governance correction | ACTIVE |
+| P3 | 300+ meaningful | 81 commits ahead of accepted main at code anchor `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220` | ACTIVE |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
 | P6 | 300+ | 0 | not started |
@@ -59,3 +59,15 @@ At each coherent wave, reconcile:
 - next in-scope engineering slice.
 
 Technical completion outranks the counter.
+
+## P3 C075+ authority-race wave
+
+Source anchors:
+- `af06eacc61417835653cd53df7abc80d55effcde` — serialize group mutations with non-deferred write transactions
+- `06de8b624f4ad4c2b81e0ddc286c4e0d3ef8c0dc` — membership mutation race checks
+- `36fd37cf630887e90a14db1ae18af3fb04a9ff58` — receipt authority + delivery projection hardening
+- `67e02424d2b9b716e91aa61a86214f3c2c841fbc` — remove post-commit actor reauthorization in realtime fan-out
+- `72448b65559364aa70caf3d65b453751dfd46795` — post-mutation projection tests
+- `4c07e0008b1ebcb8b0ab1af0981fa4e8bacc4220` — receipt-vs-removal race proof source
+
+Evidence: SOURCE INSPECTED ONLY. Executable gates NOT RUN in this environment.
