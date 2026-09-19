@@ -119,3 +119,11 @@ public sealed record TypingIndicatorResponse(
     Guid UserId,
     bool IsTyping,
     DateTimeOffset ObservedUtc);
+
+public sealed record UserDirectorySearchResponse(
+    string Query,
+    IReadOnlyList<UserSummaryResponse> Users);
+
+public sealed record DirectUnreadSummaryResponse(
+    int TotalUnreadMessages,
+    int ConversationsWithUnread);
