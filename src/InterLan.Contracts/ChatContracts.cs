@@ -38,3 +38,10 @@ public sealed record MessageReceiptResponse(
     Guid UserId,
     DateTimeOffset? DeliveredUtc,
     DateTimeOffset? ReadUtc);
+
+public sealed record DirectConversationSummaryResponse(
+    Guid ConversationId,
+    UserSummaryResponse OtherUser,
+    DateTimeOffset CreatedUtc,
+    MessageResponse? LastMessage,
+    int UnreadCount);
