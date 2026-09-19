@@ -364,6 +364,19 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Direct message search response was empty.");
     }
 
+    public async Task<MessageResponse> GetDirectMessageAsync(
+        Guid conversationId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<MessageResponse>(
+            $"/api/v1/direct/{conversationId:D}/messages/{messageId:D}",
+            cancellationToken)
+            ?? throw new InvalidDataException("Message detail response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
