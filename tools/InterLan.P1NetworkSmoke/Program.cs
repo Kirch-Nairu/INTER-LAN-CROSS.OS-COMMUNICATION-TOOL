@@ -67,9 +67,16 @@ using var handler = new HttpClientHandler
 };
 using var client = new HttpClient(handler)
 {
-    BaseAddress = new Uri($"https://localhost:{port}"),
     Timeout = TimeSpan.FromSeconds(1)
 };
+
+var probeBases = new[]
+{
+    new Uri($"https://[::1]:{port}"),
+    new Uri($"https://127.0.0.1:{port}"),
+    new Uri($"https://localhost:{port}")
+};
+Uri? activeBase = null;
 
 try
 {
@@ -79,19 +86,26 @@ try
         if (process.HasExited)
             break;
 
-        try
+        foreach (var candidateBase in probeBases)
         {
-            using var health = await client.GetAsync("/health");
-            if (health.IsSuccessStatusCode)
+            try
             {
-                ready = true;
-                break;
+                using var health = await client.GetAsync(new Uri(candidateBase, "/health"));
+                if (health.IsSuccessStatusCode)
+                {
+                    activeBase = candidateBase;
+                    ready = true;
+                    break;
+                }
+            }
+            catch
+            {
+                // Try the next loopback family/name while the server is starting.
             }
         }
-        catch
-        {
-            // Server is still starting.
-        }
+
+        if (ready)
+            break;
 
         await Task.Delay(250);
     }
@@ -104,7 +118,8 @@ try
         return 1;
     }
 
-    Console.WriteLine("PASS HTTPS Kestrel health endpoint");
+    Console.WriteLine($"PASS HTTPS Kestrel health endpoint via {activeBase}");
+    client.BaseAddress = activeBase!;
 
     var before = await client.GetFromJsonAsync<JsonElement>("/api/v1/server/info");
     var beforeServer = before.GetProperty("server");
