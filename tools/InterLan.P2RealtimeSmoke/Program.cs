@@ -37,8 +37,9 @@ static HttpClient CreateHttpClient()
 static HubConnection CreateHub(Uri baseUri, string token)
 {
     return new HubConnectionBuilder()
-        .WithUrl(new Uri(baseUri, $"/hubs/chat?access_token={Uri.EscapeDataString(token)}"), options =>
+        .WithUrl(new Uri(baseUri, "/hubs/chat"), options =>
         {
+            options.Headers["Authorization"] = $"Bearer {token}";
             options.HttpMessageHandlerFactory = _ => new HttpClientHandler
             {
                 UseProxy = false,
