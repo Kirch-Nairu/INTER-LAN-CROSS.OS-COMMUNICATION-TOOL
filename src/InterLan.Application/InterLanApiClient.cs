@@ -415,6 +415,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("User directory search response was empty.");
     }
 
+    public async Task<DirectUnreadSummaryResponse> GetDirectUnreadSummaryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<DirectUnreadSummaryResponse>(
+            "/api/v1/direct/unread",
+            cancellationToken)
+            ?? throw new InvalidDataException("Unread summary response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
