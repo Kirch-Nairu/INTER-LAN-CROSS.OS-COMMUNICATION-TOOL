@@ -5,5 +5,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/InterLan.Contracts/InterLan.Contracts.csproj" />
     <ProjectReference Include="../../src/InterLan.Infrastructure/InterLan.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/InterLan.Server/InterLan.Server.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>
