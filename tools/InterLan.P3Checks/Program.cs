@@ -334,6 +334,75 @@ try
         },
         "group message rejects oversized body");
 
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.EditGroupMessageAsync(
+                memberId,
+                created.GroupId,
+                normalizedGroupMessage.Message.MessageId,
+                new EditMessageRequest("member edit"));
+        },
+        "non-sender cannot edit group message");
+
+    var editedGroupMessage = await groups.EditGroupMessageAsync(
+        adminId,
+        created.GroupId,
+        normalizedGroupMessage.Message.MessageId,
+        new EditMessageRequest("  edited group message  "));
+
+    Check(
+        editedGroupMessage.Body == "edited group message" &&
+        editedGroupMessage.EditedUtc is not null &&
+        editedGroupMessage.DeletedUtc is null,
+        "group sender can edit durable message");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.DeleteGroupMessageAsync(
+                memberId,
+                created.GroupId,
+                normalizedGroupMessage.Message.MessageId);
+        },
+        "non-sender cannot delete group message");
+
+    var deletedGroupMessage = await groups.DeleteGroupMessageAsync(
+        adminId,
+        created.GroupId,
+        normalizedGroupMessage.Message.MessageId);
+    var duplicateDelete = await groups.DeleteGroupMessageAsync(
+        adminId,
+        created.GroupId,
+        normalizedGroupMessage.Message.MessageId);
+
+    Check(
+        duplicateDelete.DeletedUtc == deletedGroupMessage.DeletedUtc,
+        "group message delete is idempotent");
+
+    var tombstone = await groups.GetGroupMessageByIdAsync(
+        ownerId,
+        created.GroupId,
+        normalizedGroupMessage.Message.MessageId);
+
+    Check(
+        tombstone.Body.Length == 0 &&
+        tombstone.DeletedUtc == deletedGroupMessage.DeletedUtc,
+        "deleted group message remains an ordered durable tombstone");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                ownerId,
+                created.GroupId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    "reply to deleted target",
+                    normalizedGroupMessage.Message.MessageId));
+        },
+        "group reply cannot target deleted message");
+
     var firstClientMessageId = Guid.NewGuid();
     var firstMessage = await groups.SendGroupMessageAsync(
         ownerId,
