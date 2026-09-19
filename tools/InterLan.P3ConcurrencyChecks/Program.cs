@@ -49,6 +49,7 @@ try
     var roleRaceMemberId = Guid.NewGuid();
     var receiptRaceMemberId = Guid.NewGuid();
     var metadataRaceAdminId = Guid.NewGuid();
+    var readRaceMemberId = Guid.NewGuid();
 
     await using (var connection = database.OpenConnection())
     {
@@ -61,7 +62,8 @@ try
             (sendRaceMemberId, "p3-send-race", "P3 Send Race", "MEMBER"),
             (roleRaceMemberId, "p3-role-race", "P3 Role Race", "MEMBER"),
             (receiptRaceMemberId, "p3-receipt-race", "P3 Receipt Race", "MEMBER"),
-            (metadataRaceAdminId, "p3-metadata-race", "P3 Metadata Race", "MEMBER")
+            (metadataRaceAdminId, "p3-metadata-race", "P3 Metadata Race", "MEMBER"),
+            (readRaceMemberId, "p3-read-race", "P3 Read Race", "MEMBER")
         })
         {
             await using var insert = connection.CreateCommand();
@@ -175,6 +177,69 @@ try
         history.Count == 180 &&
         history.Select(message => message.MessageId).Distinct().Count() == 180,
         "concurrent group history contains every unique message exactly once");
+
+    await groups.AddMemberAsync(
+        ownerId,
+        group.GroupId,
+        new AddGroupMemberRequest(readRaceMemberId));
+
+    var readRaceTasks = Enumerable.Range(0, 96)
+        .Select(async _ =>
+        {
+            try
+            {
+                var page = await groups.GetGroupRecentHistoryPageAsync(
+                    readRaceMemberId,
+                    group.GroupId,
+                    beforeMessageId: null,
+                    limit: GroupStore.MaxMessagePageSize);
+
+                return (
+                    Status: "SUCCESS",
+                    MessageIds: page.Items
+                        .Select(message => message.MessageId)
+                        .ToArray());
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return (
+                    Status: "UNAUTHORIZED",
+                    MessageIds: Array.Empty<Guid>());
+            }
+            catch (Exception exception)
+            {
+                return (
+                    Status: $"ERROR:{exception.GetType().Name}:{exception.Message}",
+                    MessageIds: Array.Empty<Guid>());
+            }
+        })
+        .ToArray();
+
+    await Task.Yield();
+
+    await groups.RemoveMemberAsync(
+        ownerId,
+        group.GroupId,
+        readRaceMemberId);
+
+    var postRemovalSentinel = await groups.SendGroupMessageAsync(
+        ownerId,
+        group.GroupId,
+        new SendMessageRequest(
+            Guid.NewGuid(),
+            "post-removal-read-snapshot-sentinel"));
+
+    var readRaceResults = await Task.WhenAll(readRaceTasks);
+
+    Check(
+        readRaceResults.All(result =>
+            result.Status is "SUCCESS" or "UNAUTHORIZED") &&
+        readRaceResults
+            .Where(result => result.Status == "SUCCESS")
+            .All(result =>
+                !result.MessageIds.Contains(
+                    postRemovalSentinel.Message.MessageId)),
+        "revocation-raced readers never observe messages committed after removal");
 
     var duplicateClientId = Guid.NewGuid();
 
@@ -446,7 +511,7 @@ try
         limit: 250);
 
     Check(
-        restartedHistory.Count == 181,
+        restartedHistory.Count == 182,
         "concurrent group workload survives database reopen");
 
     var restartedDetails = await reopenedGroups.GetGroupDetailsAsync(
@@ -458,7 +523,8 @@ try
             member.UserId != lateMemberId &&
             member.UserId != sendRaceMemberId &&
             member.UserId != roleRaceMemberId &&
-            member.UserId != receiptRaceMemberId),
+            member.UserId != receiptRaceMemberId &&
+            member.UserId != readRaceMemberId),
         "removed memberships remain revoked after database reopen");
 }
 finally
