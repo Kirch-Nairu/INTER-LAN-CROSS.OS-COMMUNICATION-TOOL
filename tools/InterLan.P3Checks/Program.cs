@@ -48,6 +48,19 @@ async Task ExpectInvalidOperationAsync(Func<Task> action, string name)
     }
 }
 
+async Task ExpectKeyNotFoundAsync(Func<Task> action, string name)
+{
+    try
+    {
+        await action();
+        Check(false, name);
+    }
+    catch (KeyNotFoundException)
+    {
+        Check(true, name);
+    }
+}
+
 var root = Path.Combine(
     Path.GetTempPath(),
     "interlan-p3-checks-" + Guid.NewGuid().ToString("N"));
@@ -276,6 +289,57 @@ try
     Check(
         restored.Status == "ADDED" && restored.Role == "MEMBER",
         "removed membership can be restored without duplicate row");
+
+    var secondGroup = await groups.CreateGroupAsync(
+        ownerId,
+        new CreateGroupRequest("Secondary Operations"));
+
+    var secondGroupMessage = await groups.SendGroupMessageAsync(
+        ownerId,
+        secondGroup.GroupId,
+        new SendMessageRequest(
+            Guid.NewGuid(),
+            "secondary group message"));
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.GetGroupHistoryAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupMessage.Message.MessageId,
+                100);
+        },
+        "message cursor from another authorized group is rejected");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                ownerId,
+                created.GroupId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    "cross-group reply",
+                    secondGroupMessage.Message.MessageId));
+        },
+        "group reply cannot target message from another group");
+
+    var secondGroupEvents = await groups.ListGroupEventsAsync(
+        ownerId,
+        secondGroup.GroupId,
+        limit: 100);
+
+    await ExpectKeyNotFoundAsync(
+        async () =>
+        {
+            await groups.ListGroupEventsAsync(
+                ownerId,
+                created.GroupId,
+                secondGroupEvents[0].GroupEventId,
+                limit: 100);
+        },
+        "group event cursor cannot cross group scope");
 
     var directConversation = await chat.GetOrCreateDirectConversationAsync(
         ownerId,
