@@ -80,6 +80,14 @@ try
 
     Check(owner.ServerId != Guid.Empty && owner.OwnerUserId != Guid.Empty, "bootstrap creates canonical server and owner");
 
+    var persistedRuntimeSettings = await new ServerSettingsStore(database).LoadAsync(root);
+    Check(
+        persistedRuntimeSettings.Port == 7443 &&
+        persistedRuntimeSettings.DiscoveryEnabled &&
+        persistedRuntimeSettings.ClientApprovalRequired &&
+        persistedRuntimeSettings.StoragePath == Path.GetFullPath(Path.Combine(root, "files")),
+        "bootstrap persists canonical server runtime settings");
+
     var secondBootstrapRejected = await ThrowsAsync<InvalidOperationException>(() =>
         store.BootstrapOwnerAsync(
             "Other",
