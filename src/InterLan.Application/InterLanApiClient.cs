@@ -468,6 +468,136 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Current-device security response was empty.");
     }
 
+    public async Task<GroupDetailsResponse> CreateGroupAsync(
+        CreateGroupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            "/api/v1/groups",
+            request,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<GroupDetailsResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Create group response was empty.");
+    }
+
+    public async Task<IReadOnlyList<GroupSummaryResponse>> ListGroupsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<GroupSummaryResponse[]>(
+            "/api/v1/groups",
+            cancellationToken)
+            ?? Array.Empty<GroupSummaryResponse>();
+    }
+
+    public async Task<GroupDetailsResponse> GetGroupAsync(
+        Guid groupId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<GroupDetailsResponse>(
+            $"/api/v1/groups/{groupId:D}",
+            cancellationToken)
+            ?? throw new InvalidDataException("Group detail response was empty.");
+    }
+
+    public async Task<GroupDetailsResponse> UpdateGroupAsync(
+        Guid groupId,
+        UpdateGroupRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PutAsJsonAsync(
+            $"/api/v1/groups/{groupId:D}",
+            request,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<GroupDetailsResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Group update response was empty.");
+    }
+
+    public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
+        Guid groupId,
+        Guid? afterEventId = null,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        var path = $"/api/v1/groups/{groupId:D}/events?limit={limit}";
+        if (afterEventId is { } cursor)
+            path += $"&afterEventId={cursor:D}";
+
+        return await _httpClient.GetFromJsonAsync<GroupEventResponse[]>(
+            path,
+            cancellationToken)
+            ?? Array.Empty<GroupEventResponse>();
+    }
+
+    public async Task<GroupMembershipMutationResponse> AddGroupMemberAsync(
+        Guid groupId,
+        AddGroupMemberRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsJsonAsync(
+            $"/api/v1/groups/{groupId:D}/members",
+            request,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<GroupMembershipMutationResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Add group member response was empty.");
+    }
+
+    public async Task<GroupMembershipMutationResponse> RemoveGroupMemberAsync(
+        Guid groupId,
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.DeleteAsync(
+            $"/api/v1/groups/{groupId:D}/members/{userId:D}",
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<GroupMembershipMutationResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Remove group member response was empty.");
+    }
+
+    public async Task<GroupMembershipMutationResponse> UpdateGroupMemberRoleAsync(
+        Guid groupId,
+        Guid userId,
+        UpdateGroupMemberRoleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PutAsJsonAsync(
+            $"/api/v1/groups/{groupId:D}/members/{userId:D}/role",
+            request,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<GroupMembershipMutationResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Group role mutation response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
