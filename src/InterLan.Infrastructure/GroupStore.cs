@@ -91,6 +91,45 @@ public sealed class GroupStore(SqliteDatabase database)
             cancellationToken);
     }
 
+    public async Task<IReadOnlyList<GroupSummaryResponse>> ListGroupsAsync(
+        Guid actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireActiveUserAsync(
+            connection,
+            actorUserId,
+            cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT g.group_id, g.name, g.topic,
+                   gm.group_role, g.created_utc
+            FROM groups g
+            JOIN group_members gm
+              ON gm.group_id = g.group_id
+             AND gm.user_id = $userId
+             AND gm.removed_utc IS NULL
+            ORDER BY lower(g.name), g.group_id;
+            """;
+        command.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+
+        var groups = new List<GroupSummaryResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            groups.Add(new GroupSummaryResponse(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.GetString(3),
+                DateTimeOffset.Parse(reader.GetString(4))));
+        }
+
+        return groups;
+    }
+
     public async Task<GroupDetailsResponse> GetGroupDetailsAsync(
         Guid actorUserId,
         Guid groupId,
