@@ -137,6 +137,7 @@ public static class InterLanServerHost
         app.MapInterLanSystemEndpoints();
         app.MapInterLanEnrollmentEndpoints();
         app.MapInterLanMessagingEndpoints();
+        app.MapInterLanGroupEndpoints();
 
         app.MapHub<ControlHub>("/hubs/control");
         app.MapHub<ChatHub>("/hubs/chat");
