@@ -213,6 +213,38 @@ try
         readReceipts[0].ReadUtc is not null,
         "recipient read acknowledgement advances receipt state idempotently");
 
+    var bobAfterReadSummaries =
+        await chat.ListDirectConversationSummariesAsync(bob);
+    var bobAfterRead = bobAfterReadSummaries.Single(summary =>
+        summary.ConversationId == ab1.ConversationId);
+    Check(
+        bobAfterRead.UnreadCount == 0,
+        "read acknowledgement clears direct-conversation unread projection");
+
+    var mutable = await chat.SendDirectMessageAsync(
+        alice,
+        ac.ConversationId,
+        new SendMessageRequest(Guid.NewGuid(), "draft message"));
+
+    Check(await ThrowsAsync<UnauthorizedAccessException>(() =>
+        chat.EditDirectMessageAsync(
+            carol,
+            ac.ConversationId,
+            mutable.Message.MessageId,
+            new EditMessageRequest("recipient cannot edit"))),
+        "direct-message recipient cannot edit sender content");
+
+    var edited = await chat.EditDirectMessageAsync(
+        alice,
+        ac.ConversationId,
+        mutable.Message.MessageId,
+        new EditMessageRequest("edited message"));
+
+    Check(
+        edited.Body == "edited message" &&
+        edited.EditedUtc is not null,
+        "sender can edit active direct message");
+
     var concurrentSends = await Task.WhenAll(
         Enumerable.Range(0, 20)
             .Select(index => chat.SendDirectMessageAsync(
