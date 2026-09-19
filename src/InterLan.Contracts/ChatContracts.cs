@@ -113,3 +113,9 @@ public sealed record UserPresenceResponse(
     bool IsOnline,
     int ConnectionCount,
     DateTimeOffset ObservedUtc);
+
+public sealed record TypingIndicatorResponse(
+    Guid ConversationId,
+    Guid UserId,
+    bool IsTyping,
+    DateTimeOffset ObservedUtc);
