@@ -157,6 +157,83 @@ public sealed class ChatStore(SqliteDatabase database)
         return conversations;
     }
 
+    public async Task<IReadOnlyList<DirectConversationSummaryResponse>> ListDirectConversationSummariesAsync(
+        Guid actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var conversations = await ListDirectConversationsAsync(actorUserId, cancellationToken);
+        await using var connection = database.OpenConnection();
+
+        var summaries = new List<DirectConversationSummaryResponse>(conversations.Count);
+
+        foreach (var conversation in conversations)
+        {
+            MessageResponse? lastMessage = null;
+
+            await using (var last = connection.CreateCommand())
+            {
+                last.CommandText =
+                    """
+                    SELECT message_id, scope_type, scope_id, sender_user_id,
+                           client_message_id, body, reply_to_message_id, created_utc
+                    FROM messages
+                    WHERE scope_type = 'DIRECT'
+                      AND scope_id = $conversationId
+                      AND deleted_utc IS NULL
+                    ORDER BY created_utc DESC, message_id DESC
+                    LIMIT 1;
+                    """;
+                last.Parameters.AddWithValue(
+                    "$conversationId",
+                    conversation.ConversationId.ToString("D"));
+
+                await using var reader = await last.ExecuteReaderAsync(cancellationToken);
+                if (await reader.ReadAsync(cancellationToken))
+                    lastMessage = ReadMessage(reader);
+            }
+
+            int unreadCount;
+            await using (var unread = connection.CreateCommand())
+            {
+                unread.CommandText =
+                    """
+                    SELECT COUNT(1)
+                    FROM messages m
+                    WHERE m.scope_type = 'DIRECT'
+                      AND m.scope_id = $conversationId
+                      AND m.deleted_utc IS NULL
+                      AND m.sender_user_id <> $actor
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM message_receipts r
+                          WHERE r.message_id = m.message_id
+                            AND r.user_id = $actor
+                            AND r.read_utc IS NOT NULL
+                      );
+                    """;
+                unread.Parameters.AddWithValue(
+                    "$conversationId",
+                    conversation.ConversationId.ToString("D"));
+                unread.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+                unreadCount = Convert.ToInt32(
+                    await unread.ExecuteScalarAsync(cancellationToken));
+            }
+
+            summaries.Add(new DirectConversationSummaryResponse(
+                conversation.ConversationId,
+                conversation.OtherUser,
+                conversation.CreatedUtc,
+                lastMessage,
+                unreadCount));
+        }
+
+        return summaries
+            .OrderByDescending(summary =>
+                summary.LastMessage?.CreatedUtc ?? summary.CreatedUtc)
+            .ThenByDescending(summary => summary.ConversationId)
+            .ToArray();
+    }
+
     public async Task<PersistedMessageResult> SendDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
