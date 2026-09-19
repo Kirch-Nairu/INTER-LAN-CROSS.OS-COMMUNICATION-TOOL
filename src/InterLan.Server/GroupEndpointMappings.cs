@@ -375,10 +375,9 @@ public static class GroupEndpointMappings
 
                 if (persisted.Created)
                 {
-                    var memberIds = await groups.GetActiveGroupMemberIdsAsync(
-                        principal.UserId,
-                        groupId,
-                        cancellationToken);
+                    var memberIds = await groups.GetGroupDeliveryTargetUserIdsAsync(
+                    groupId,
+                    cancellationToken);
 
                     foreach (var memberId in memberIds)
                     {
@@ -469,8 +468,7 @@ public static class GroupEndpointMappings
                     request,
                     cancellationToken);
 
-                var memberIds = await groups.GetActiveGroupMemberIdsAsync(
-                    principal.UserId,
+                var memberIds = await groups.GetGroupDeliveryTargetUserIdsAsync(
                     groupId,
                     cancellationToken);
 
@@ -527,8 +525,7 @@ public static class GroupEndpointMappings
                     messageId,
                     cancellationToken);
 
-                var memberIds = await groups.GetActiveGroupMemberIdsAsync(
-                    principal.UserId,
+                var memberIds = await groups.GetGroupDeliveryTargetUserIdsAsync(
                     groupId,
                     cancellationToken);
 
@@ -575,13 +572,7 @@ public static class GroupEndpointMappings
 
             try
             {
-                await groups.MarkGroupMessageDeliveredAsync(
-                    principal.UserId,
-                    groupId,
-                    messageId,
-                    cancellationToken);
-
-                var receipts = await groups.GetGroupMessageReceiptsAsync(
+                var receipts = await groups.MarkGroupMessageDeliveredAsync(
                     principal.UserId,
                     groupId,
                     messageId,
@@ -590,7 +581,6 @@ public static class GroupEndpointMappings
                 await BroadcastGroupReceiptsAsync(
                     groups,
                     hub,
-                    principal.UserId,
                     groupId,
                     messageId,
                     receipts,
@@ -630,13 +620,7 @@ public static class GroupEndpointMappings
 
             try
             {
-                await groups.MarkGroupMessageReadAsync(
-                    principal.UserId,
-                    groupId,
-                    messageId,
-                    cancellationToken);
-
-                var receipts = await groups.GetGroupMessageReceiptsAsync(
+                var receipts = await groups.MarkGroupMessageReadAsync(
                     principal.UserId,
                     groupId,
                     messageId,
@@ -645,7 +629,6 @@ public static class GroupEndpointMappings
                 await BroadcastGroupReceiptsAsync(
                     groups,
                     hub,
-                    principal.UserId,
                     groupId,
                     messageId,
                     receipts,
@@ -706,14 +689,12 @@ public static class GroupEndpointMappings
     private static async Task BroadcastGroupReceiptsAsync(
         GroupStore groups,
         IHubContext<ChatHub> hub,
-        Guid actorUserId,
         Guid groupId,
         Guid messageId,
         IReadOnlyList<MessageReceiptResponse> receipts,
         CancellationToken cancellationToken)
     {
-        var memberIds = await groups.GetActiveGroupMemberIdsAsync(
-            actorUserId,
+        var memberIds = await groups.GetGroupDeliveryTargetUserIdsAsync(
             groupId,
             cancellationToken);
 
