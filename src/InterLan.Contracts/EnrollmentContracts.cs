@@ -80,3 +80,22 @@ public sealed record DeviceSummaryResponse(
     DateTimeOffset? ApprovedUtc,
     DateTimeOffset? RevokedUtc,
     DateTimeOffset? LastSeenUtc);
+
+public sealed record ServerSettingsResponse(
+    string BindAddress,
+    int Port,
+    bool DiscoveryEnabled,
+    bool ClientApprovalRequired,
+    string StoragePath);
+
+public sealed record ServerSettingsSnapshotResponse(
+    ServerSettingsResponse Active,
+    ServerSettingsResponse Persisted,
+    bool RestartRequired);
+
+public sealed record UpdateServerSettingsRequest(
+    string BindAddress,
+    int Port,
+    bool DiscoveryEnabled,
+    bool ClientApprovalRequired,
+    string StoragePath);
