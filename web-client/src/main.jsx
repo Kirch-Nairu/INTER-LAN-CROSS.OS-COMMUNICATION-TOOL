@@ -11,7 +11,7 @@ function App() {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
       })
-      .then((data) => setServer({ state: "ready", data }))
+      .then((data) => setServer({ state: "ready", data: { ...data, ...data.server } }))
       .catch((error) => setServer({ state: "offline", error: String(error) }));
   }, []);
 
