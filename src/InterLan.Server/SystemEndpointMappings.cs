@@ -55,12 +55,15 @@ public static class SystemEndpointMappings
                     enrollment,
                     cancellationToken);
 
+                if (string.IsNullOrWhiteSpace(request.StoragePath))
+                    return Results.BadRequest(new { error = "StoragePath is required." });
+
                 var persisted = new ServerRuntimeSettings(
                     request.BindAddress,
                     request.Port,
                     request.DiscoveryEnabled,
                     request.ClientApprovalRequired,
-                    Path.GetFullPath(request.StoragePath));
+                    Path.GetFullPath(request.StoragePath.Trim()));
 
                 await settingsStore.SaveAsync(persisted, cancellationToken);
 
