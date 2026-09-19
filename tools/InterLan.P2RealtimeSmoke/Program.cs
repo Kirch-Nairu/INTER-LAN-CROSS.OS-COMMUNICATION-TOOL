@@ -279,6 +279,21 @@ var baseUri = server.BaseUri;
 
     await memberHub.StartAsync();
 
+    var presenceSnapshot = await memberHttp.GetFromJsonAsync<JsonElement[]>(
+        "/api/v1/presence");
+
+    if (presenceSnapshot is null ||
+        !presenceSnapshot.Any(item =>
+            item.GetProperty("userId").GetGuid() == memberUserId &&
+            item.GetProperty("isOnline").GetBoolean() &&
+            item.GetProperty("connectionCount").GetInt32() >= 1))
+    {
+        Console.Error.WriteLine("FAIL connected member missing from presence snapshot");
+        return 1;
+    }
+
+    Console.WriteLine("PASS connected member appears in authenticated presence snapshot");
+
     var clientMessageId = Guid.NewGuid();
     using var send = await ownerHttp.PostAsJsonAsync($"/api/v1/direct/{conversationId:D}/messages", new
     {
