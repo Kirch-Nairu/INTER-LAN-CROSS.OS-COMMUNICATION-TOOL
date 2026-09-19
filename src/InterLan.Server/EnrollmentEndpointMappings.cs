@@ -118,6 +118,37 @@ public static class EnrollmentEndpointMappings
             }
         });
         
+        app.MapPost("/api/v1/auth/device/unpair", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            RealtimeConnectionRegistry realtimeConnections,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                if (principal.DeviceId is not { } deviceId)
+                    return Results.Conflict(new { error = "Current session is not device-bound." });
+
+                await enrollment.RevokeOwnDeviceAsync(
+                    principal.UserId,
+                    principal.SessionId,
+                    deviceId,
+                    cancellationToken);
+
+                realtimeConnections.RevokeDevice(deviceId);
+                return Results.NoContent();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+
         app.MapPost("/api/v1/auth/logout", async (
             HttpContext context,
             EnrollmentStore enrollment,
