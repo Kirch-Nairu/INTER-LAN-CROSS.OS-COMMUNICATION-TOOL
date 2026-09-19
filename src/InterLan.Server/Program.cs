@@ -23,7 +23,9 @@ var port = builder.Configuration.GetValue("InterLan:Server:Port", 7443);
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenAnyIP(port, listen => listen.UseHttps(certificate.Certificate));
+    // V1 LAN discovery is IPv4 multicast, so bind HTTPS explicitly on IPv4.
+    // This avoids Windows dual-stack ambiguity observed with ListenAnyIP/[::].
+    options.Listen(IPAddress.Any, port, listen => listen.UseHttps(certificate.Certificate));
 });
 
 var database = new SqliteDatabase(Path.Combine(dataDirectory, "interlan.db"));

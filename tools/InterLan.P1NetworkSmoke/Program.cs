@@ -72,7 +72,6 @@ using var client = new HttpClient(handler)
 
 var probeBases = new[]
 {
-    new Uri($"https://[::1]:{port}"),
     new Uri($"https://127.0.0.1:{port}"),
     new Uri($"https://localhost:{port}")
 };
@@ -154,7 +153,7 @@ try
 
     Console.WriteLine("PASS loopback bootstrap endpoint");
 
-    using var duplicate = await client.PostAsJsonAsync("/api/v1/bootstrap/server", new
+    using var duplicate = await client.PostAsJsonAsync(At("/api/v1/bootstrap/server"), new
     {
         serverName = "Second",
         ownerUsername = "owner2",
