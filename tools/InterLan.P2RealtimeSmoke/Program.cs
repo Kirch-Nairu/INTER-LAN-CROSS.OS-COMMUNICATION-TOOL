@@ -536,6 +536,39 @@ var baseUri = server.BaseUri;
     }
 
     Console.WriteLine("PASS device revocation removes HTTP authority immediately");
+
+    var messageLimiterSaturated = false;
+    for (var index = 0; index < 140; index++)
+    {
+        using var limitedSend = await ownerHttp.PostAsJsonAsync(
+            $"/api/v1/direct/{conversationId:D}/messages",
+            new
+            {
+                clientMessageId = Guid.NewGuid(),
+                body = $"rate-limit-{index:D3}"
+            });
+
+        if (limitedSend.StatusCode == HttpStatusCode.TooManyRequests)
+        {
+            messageLimiterSaturated = true;
+            break;
+        }
+
+        if (!limitedSend.IsSuccessStatusCode)
+        {
+            Console.Error.WriteLine(
+                $"FAIL message limiter saturation request returned {(int)limitedSend.StatusCode}");
+            return 1;
+        }
+    }
+
+    if (!messageLimiterSaturated)
+    {
+        Console.Error.WriteLine("FAIL message limiter did not saturate within bounded request count");
+        return 1;
+    }
+
+    Console.WriteLine("PASS authenticated message partition enforces bounded saturation");
     Console.WriteLine("INTER-LAN P2 REALTIME SMOKE: PASS");
     return 0;
 }
