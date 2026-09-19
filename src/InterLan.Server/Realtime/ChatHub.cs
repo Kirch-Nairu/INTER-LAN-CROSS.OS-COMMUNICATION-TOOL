@@ -68,6 +68,8 @@ public sealed class ChatHub(
 
         if (principal is not null)
         {
+            // Typing state is intentionally ephemeral. Disconnect implicitly clears
+            // any local typing indicator maintained by recipients.
             await Clients.GroupExcept(
                     AuthenticatedGroup,
                     new[] { Context.ConnectionId })
