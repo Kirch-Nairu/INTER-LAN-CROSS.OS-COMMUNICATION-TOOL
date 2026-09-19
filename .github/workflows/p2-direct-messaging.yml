@@ -26,6 +26,7 @@ jobs:
       - run: dotnet run --project tools/InterLan.P1Checks/InterLan.P1Checks.csproj --configuration Release
       - run: dotnet run --project tools/InterLan.P1NetworkSmoke/InterLan.P1NetworkSmoke.csproj --configuration Release
       - run: dotnet run --project tools/InterLan.P2Checks/InterLan.P2Checks.csproj --configuration Release
+      - run: dotnet run --project tools/InterLan.P2RealtimeSmoke/InterLan.P2RealtimeSmoke.csproj --configuration Release
 
   web:
     name: P2 Android web build
