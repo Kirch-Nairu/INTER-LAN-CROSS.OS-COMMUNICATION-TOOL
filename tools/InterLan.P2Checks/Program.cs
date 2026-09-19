@@ -241,6 +241,16 @@ try
         !bobPreference.IsArchived,
         "direct conversation preference persists pin and mute state");
 
+    var aliceAfterBobPreference =
+        await chat.GetDirectConversationPreferenceAsync(
+            alice,
+            ab1.ConversationId);
+
+    Check(
+        !aliceAfterBobPreference.IsPinned &&
+        aliceAfterBobPreference.MutedUntilUtc is null,
+        "direct conversation preferences remain isolated per user");
+
     var bobBeforeReadSummaries =
         await chat.ListDirectConversationSummariesAsync(bob);
     var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
