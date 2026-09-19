@@ -48,7 +48,9 @@ public sealed record SubmitJoinResponse(
     Guid RequestId,
     string Status);
 
-public sealed record JoinDecisionRequest(bool Approve);
+public sealed record JoinDecisionRequest(
+    bool Approve,
+    Guid? ExistingUserId = null);
 
 public sealed record JoinDecisionResponse(
     Guid RequestId,
