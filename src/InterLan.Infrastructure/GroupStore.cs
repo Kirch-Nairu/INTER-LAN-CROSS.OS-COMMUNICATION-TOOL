@@ -971,45 +971,52 @@ public sealed class GroupStore(SqliteDatabase database)
             groupId,
             cancellationToken);
 
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT gm.user_id
-            FROM group_members gm
-            JOIN users u ON u.user_id = gm.user_id
-            WHERE gm.group_id = $groupId
-              AND gm.removed_utc IS NULL
-              AND u.disabled_utc IS NULL
-            ORDER BY gm.user_id;
-            """;
-        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
-
-        var members = new List<Guid>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-            members.Add(Guid.Parse(reader.GetString(0)));
-
-        return members;
+        return await ListActiveGroupMemberIdsAsync(
+            connection,
+            transaction: null,
+            groupId,
+            cancellationToken);
     }
 
-    public async Task MarkGroupMessageDeliveredAsync(
+    /// <summary>
+    /// Server-internal post-authorization projection used only after a group
+    /// mutation has already established caller authority. Do not expose this
+    /// method directly as a client authorization surface.
+    /// </summary>
+    public async Task<IReadOnlyList<Guid>> GetGroupDeliveryTargetUserIdsAsync(
+        Guid groupId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        return await ListActiveGroupMemberIdsAsync(
+            connection,
+            transaction: null,
+            groupId,
+            cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MessageReceiptResponse>> MarkGroupMessageDeliveredAsync(
         Guid actorUserId,
         Guid groupId,
         Guid messageId,
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        using var transaction = BeginWriteTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         var senderUserId = await RequireGroupMessageAsync(
             connection,
             groupId,
             messageId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         if (senderUserId == actorUserId)
             throw new InvalidOperationException(
@@ -1017,43 +1024,59 @@ public sealed class GroupStore(SqliteDatabase database)
 
         var now = DateTimeOffset.UtcNow.ToString("O");
 
-        await using var receipt = connection.CreateCommand();
-        receipt.CommandText =
-            """
-            INSERT INTO message_receipts (
-                message_id, user_id, delivered_utc, read_utc
-            ) VALUES (
-                $messageId, $userId, $utc, NULL
-            )
-            ON CONFLICT(message_id, user_id) DO UPDATE SET
-                delivered_utc = COALESCE(
-                    message_receipts.delivered_utc,
-                    excluded.delivered_utc);
-            """;
-        receipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
-        receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
-        receipt.Parameters.AddWithValue("$utc", now);
-        await receipt.ExecuteNonQueryAsync(cancellationToken);
+        await using (var receipt = connection.CreateCommand())
+        {
+            receipt.Transaction = transaction;
+            receipt.CommandText =
+                """
+                INSERT INTO message_receipts (
+                    message_id, user_id, delivered_utc, read_utc
+                ) VALUES (
+                    $messageId, $userId, $utc, NULL
+                )
+                ON CONFLICT(message_id, user_id) DO UPDATE SET
+                    delivered_utc = COALESCE(
+                        message_receipts.delivered_utc,
+                        excluded.delivered_utc);
+                """;
+            receipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+            receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            receipt.Parameters.AddWithValue("$utc", now);
+            await receipt.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var receipts = await ListGroupMessageReceiptsAsync(
+            connection,
+            transaction,
+            messageId,
+            cancellationToken);
+
+        transaction.Commit();
+        return receipts;
     }
 
-    public async Task MarkGroupMessageReadAsync(
+    public async Task<IReadOnlyList<MessageReceiptResponse>> MarkGroupMessageReadAsync(
         Guid actorUserId,
         Guid groupId,
         Guid messageId,
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        using var transaction = BeginWriteTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         var senderUserId = await RequireGroupMessageAsync(
             connection,
             groupId,
             messageId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         if (senderUserId == actorUserId)
             throw new InvalidOperationException(
@@ -1061,26 +1084,38 @@ public sealed class GroupStore(SqliteDatabase database)
 
         var now = DateTimeOffset.UtcNow.ToString("O");
 
-        await using var receipt = connection.CreateCommand();
-        receipt.CommandText =
-            """
-            INSERT INTO message_receipts (
-                message_id, user_id, delivered_utc, read_utc
-            ) VALUES (
-                $messageId, $userId, $utc, $utc
-            )
-            ON CONFLICT(message_id, user_id) DO UPDATE SET
-                delivered_utc = COALESCE(
-                    message_receipts.delivered_utc,
-                    excluded.delivered_utc),
-                read_utc = COALESCE(
-                    message_receipts.read_utc,
-                    excluded.read_utc);
-            """;
-        receipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
-        receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
-        receipt.Parameters.AddWithValue("$utc", now);
-        await receipt.ExecuteNonQueryAsync(cancellationToken);
+        await using (var receipt = connection.CreateCommand())
+        {
+            receipt.Transaction = transaction;
+            receipt.CommandText =
+                """
+                INSERT INTO message_receipts (
+                    message_id, user_id, delivered_utc, read_utc
+                ) VALUES (
+                    $messageId, $userId, $utc, $utc
+                )
+                ON CONFLICT(message_id, user_id) DO UPDATE SET
+                    delivered_utc = COALESCE(
+                        message_receipts.delivered_utc,
+                        excluded.delivered_utc),
+                    read_utc = COALESCE(
+                        message_receipts.read_utc,
+                        excluded.read_utc);
+                """;
+            receipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+            receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            receipt.Parameters.AddWithValue("$utc", now);
+            await receipt.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        var receipts = await ListGroupMessageReceiptsAsync(
+            connection,
+            transaction,
+            messageId,
+            cancellationToken);
+
+        transaction.Commit();
+        return receipts;
     }
 
     public async Task<IReadOnlyList<MessageReceiptResponse>> GetGroupMessageReceiptsAsync(
@@ -1102,32 +1137,11 @@ public sealed class GroupStore(SqliteDatabase database)
             messageId,
             cancellationToken);
 
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT message_id, user_id, delivered_utc, read_utc
-            FROM message_receipts
-            WHERE message_id = $messageId
-            ORDER BY user_id;
-            """;
-        command.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
-
-        var receipts = new List<MessageReceiptResponse>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            receipts.Add(new MessageReceiptResponse(
-                Guid.Parse(reader.GetString(0)),
-                Guid.Parse(reader.GetString(1)),
-                reader.IsDBNull(2)
-                    ? null
-                    : DateTimeOffset.Parse(reader.GetString(2)),
-                reader.IsDBNull(3)
-                    ? null
-                    : DateTimeOffset.Parse(reader.GetString(3))));
-        }
-
-        return receipts;
+        return await ListGroupMessageReceiptsAsync(
+            connection,
+            transaction: null,
+            messageId,
+            cancellationToken);
     }
 
     public async Task<MessageResponse> GetGroupMessageByIdAsync(
@@ -1455,13 +1469,78 @@ public sealed class GroupStore(SqliteDatabase database)
             : null;
     }
 
-    private static async Task<Guid> RequireGroupMessageAsync(
+    private static async Task<IReadOnlyList<Guid>> ListActiveGroupMemberIdsAsync(
         SqliteConnection connection,
+        SqliteTransaction? transaction,
         Guid groupId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT gm.user_id
+            FROM group_members gm
+            JOIN users u ON u.user_id = gm.user_id
+            WHERE gm.group_id = $groupId
+              AND gm.removed_utc IS NULL
+              AND u.disabled_utc IS NULL
+            ORDER BY gm.user_id;
+            """;
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+        var members = new List<Guid>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            members.Add(Guid.Parse(reader.GetString(0)));
+
+        return members;
+    }
+
+    private static async Task<IReadOnlyList<MessageReceiptResponse>> ListGroupMessageReceiptsAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
         Guid messageId,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT message_id, user_id, delivered_utc, read_utc
+            FROM message_receipts
+            WHERE message_id = $messageId
+            ORDER BY user_id;
+            """;
+        command.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+
+        var receipts = new List<MessageReceiptResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            receipts.Add(new MessageReceiptResponse(
+                Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)),
+                reader.IsDBNull(2)
+                    ? null
+                    : DateTimeOffset.Parse(reader.GetString(2)),
+                reader.IsDBNull(3)
+                    ? null
+                    : DateTimeOffset.Parse(reader.GetString(3))));
+        }
+
+        return receipts;
+    }
+
+    private static async Task<Guid> RequireGroupMessageAsync(
+        SqliteConnection connection,
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken,
+        SqliteTransaction? transaction = null)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             SELECT sender_user_id
