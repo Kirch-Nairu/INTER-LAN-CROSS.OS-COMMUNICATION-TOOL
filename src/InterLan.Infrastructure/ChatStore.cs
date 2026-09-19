@@ -39,6 +39,61 @@ public sealed class ChatStore(SqliteDatabase database)
         return users;
     }
 
+    public async Task<UserDirectorySearchResponse> SearchUsersAsync(
+        Guid actorUserId,
+        string query,
+        int limit = 25,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = (query ?? string.Empty)
+            .Trim()
+            .Normalize(System.Text.NormalizationForm.FormC);
+
+        if (normalizedQuery.Length is < 1 or > 64)
+            throw new ArgumentException(
+                "User search query must contain between 1 and 64 characters.",
+                nameof(query));
+
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var connection = database.OpenConnection();
+        await RequireActiveUserAsync(connection, actorUserId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT user_id, username, display_name, role
+            FROM users
+            WHERE disabled_utc IS NULL
+              AND user_id <> $actor
+              AND (
+                  instr(lower(username), lower($query)) > 0
+                  OR instr(lower(display_name), lower($query)) > 0
+              )
+            ORDER BY lower(display_name), lower(username), user_id
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+        command.Parameters.AddWithValue("$query", normalizedQuery);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var users = new List<UserSummaryResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            users.Add(new UserSummaryResponse(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3)));
+        }
+
+        return new UserDirectorySearchResponse(
+            normalizedQuery,
+            users);
+    }
+
     public async Task<DirectConversationResponse> GetOrCreateDirectConversationAsync(
         Guid actorUserId,
         Guid otherUserId,
