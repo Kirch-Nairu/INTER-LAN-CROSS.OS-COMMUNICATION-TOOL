@@ -1060,6 +1060,73 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         return sessions;
     }
 
+    public async Task<IReadOnlyList<Guid>> RevokeOtherSessionsAsync(
+        Guid actorUserId,
+        Guid currentSessionId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        var now = DateTimeOffset.UtcNow;
+
+        var revokedSessionIds = new List<Guid>();
+
+        await using (var list = connection.CreateCommand())
+        {
+            list.Transaction = transaction;
+            list.CommandText =
+                """
+                SELECT session_id
+                FROM device_sessions
+                WHERE user_id = $userId
+                  AND session_id <> $currentSessionId
+                  AND revoked_utc IS NULL
+                  AND expires_utc > $now;
+                """;
+            list.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            list.Parameters.AddWithValue("$currentSessionId", currentSessionId.ToString("D"));
+            list.Parameters.AddWithValue("$now", now.ToString("O"));
+
+            await using var reader = await list.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+                revokedSessionIds.Add(Guid.Parse(reader.GetString(0)));
+        }
+
+        if (revokedSessionIds.Count > 0)
+        {
+            await using var revoke = connection.CreateCommand();
+            revoke.Transaction = transaction;
+            revoke.CommandText =
+                """
+                UPDATE device_sessions
+                SET revoked_utc = $utc
+                WHERE user_id = $userId
+                  AND session_id <> $currentSessionId
+                  AND revoked_utc IS NULL
+                  AND expires_utc > $now;
+                """;
+            revoke.Parameters.AddWithValue("$utc", now.ToString("O"));
+            revoke.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+            revoke.Parameters.AddWithValue("$currentSessionId", currentSessionId.ToString("D"));
+            revoke.Parameters.AddWithValue("$now", now.ToString("O"));
+            await revoke.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "OTHER_SESSIONS_REVOKED",
+            "USER",
+            actorUserId,
+            $"{{\"revokedCount\":{revokedSessionIds.Count}}}",
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+        return revokedSessionIds;
+    }
+
     public async Task RevokeOwnSessionAsync(
         Guid actorUserId,
         Guid sessionId,
