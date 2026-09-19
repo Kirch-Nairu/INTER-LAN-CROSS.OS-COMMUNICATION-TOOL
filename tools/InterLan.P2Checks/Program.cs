@@ -134,25 +134,27 @@ try
             new SendMessageRequest(Guid.NewGuid(), new string('x', ChatStore.MaxMessageLength + 1)))),
         "oversized message fails closed");
 
+    await chat.MarkDeliveredAsync(bob, first.Message.MessageId);
+    await chat.MarkDeliveredAsync(bob, first.Message.MessageId);
+
+    var deliveredReceipts = await chat.GetReceiptsAsync(alice, first.Message.MessageId);
+    Check(
+        deliveredReceipts.Count == 1 &&
+        deliveredReceipts[0].UserId == bob &&
+        deliveredReceipts[0].DeliveredUtc is not null &&
+        deliveredReceipts[0].ReadUtc is null,
+        "recipient delivery acknowledgement is durable and idempotent");
+
     await chat.MarkReadAsync(bob, first.Message.MessageId);
     await chat.MarkReadAsync(bob, first.Message.MessageId);
 
-    await using (var connection = database.OpenConnection())
-    {
-        await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT COUNT(1)
-            FROM message_receipts
-            WHERE message_id = $messageId
-              AND user_id = $userId
-              AND read_utc IS NOT NULL;
-            """;
-        command.Parameters.AddWithValue("$messageId", first.Message.MessageId.ToString("D"));
-        command.Parameters.AddWithValue("$userId", bob.ToString("D"));
-        Check(Convert.ToInt64(await command.ExecuteScalarAsync()) == 1,
-            "read receipt is idempotent");
-    }
+    var readReceipts = await chat.GetReceiptsAsync(alice, first.Message.MessageId);
+    Check(
+        readReceipts.Count == 1 &&
+        readReceipts[0].UserId == bob &&
+        readReceipts[0].DeliveredUtc is not null &&
+        readReceipts[0].ReadUtc is not null,
+        "recipient read acknowledgement advances receipt state idempotently");
 
     var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
     await reopened.InitializeAsync();
