@@ -323,6 +323,27 @@ try
 
     Console.WriteLine("PASS realtime recipient explicitly acknowledges durable delivery");
 
+    using var readAck = await memberHttp.PostAsync(
+        $"/api/v1/messages/{persistedMessageId:D}/read",
+        content: null);
+    if (!readAck.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine($"FAIL recipient read acknowledgement {(int)readAck.StatusCode}: {await readAck.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    var readState = await ownerHttp.GetFromJsonAsync<JsonElement[]>(
+        $"/api/v1/messages/{persistedMessageId:D}/receipts");
+    if (readState is null ||
+        readState.Length != 1 ||
+        readState[0].GetProperty("readUtc").ValueKind == JsonValueKind.Null)
+    {
+        Console.Error.WriteLine("FAIL read receipt state was not persisted correctly");
+        return 1;
+    }
+
+    Console.WriteLine("PASS recipient read acknowledgement advances durable receipt state");
+
     await memberHub.StopAsync();
 
     var offlineClientMessageId = Guid.NewGuid();
