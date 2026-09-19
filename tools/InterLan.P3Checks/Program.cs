@@ -110,6 +110,46 @@ try
     var groups = new GroupStore(database);
     var chat = new ChatStore(database);
 
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.CreateGroupAsync(
+                ownerId,
+                new CreateGroupRequest("   "));
+        },
+        "blank group name fails closed");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.CreateGroupAsync(
+                ownerId,
+                new CreateGroupRequest(
+                    new string('n', 121)));
+        },
+        "oversized group name fails closed");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.CreateGroupAsync(
+                ownerId,
+                new CreateGroupRequest(
+                    "Valid",
+                    new string('t', 501)));
+        },
+        "oversized group topic fails closed");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.CreateGroupAsync(
+                ownerId,
+                new CreateGroupRequest(
+                    "Unsafe\u0000Group"));
+        },
+        "group metadata rejects unsupported control characters");
+
     var created = await groups.CreateGroupAsync(
         ownerId,
         new CreateGroupRequest("Operations", "P3 authority checks"));
