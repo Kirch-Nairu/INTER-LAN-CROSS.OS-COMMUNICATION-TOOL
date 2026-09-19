@@ -636,6 +636,97 @@ public sealed class ChatStore(SqliteDatabase database)
             true);
     }
 
+    public async Task<DirectGlobalMessageSearchResponse> SearchAllDirectMessagesAsync(
+        Guid actorUserId,
+        string query,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = (query ?? string.Empty)
+            .Trim()
+            .Normalize(System.Text.NormalizationForm.FormC);
+
+        if (normalizedQuery.Length is < 1 or > 128)
+            throw new ArgumentException(
+                "Search query must contain between 1 and 128 characters.",
+                nameof(query));
+
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var connection = database.OpenConnection();
+        await RequireActiveUserAsync(connection, actorUserId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT
+                m.scope_id,
+                peer.user_id,
+                peer.username,
+                peer.display_name,
+                peer.role,
+                m.message_id,
+                m.scope_type,
+                m.scope_id,
+                m.sender_user_id,
+                m.client_message_id,
+                m.body,
+                m.reply_to_message_id,
+                m.created_utc,
+                m.edited_utc,
+                m.deleted_utc
+            FROM messages m
+            JOIN direct_conversation_members mine
+              ON mine.conversation_id = m.scope_id
+             AND mine.user_id = $actor
+            JOIN direct_conversation_members other
+              ON other.conversation_id = m.scope_id
+             AND other.user_id <> $actor
+            JOIN users peer
+              ON peer.user_id = other.user_id
+             AND peer.disabled_utc IS NULL
+            WHERE m.scope_type = 'DIRECT'
+              AND m.deleted_utc IS NULL
+              AND m.body IS NOT NULL
+              AND instr(lower(m.body), lower($query)) > 0
+            ORDER BY m.created_utc DESC, m.message_id DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+        command.Parameters.AddWithValue("$query", normalizedQuery);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var hits = new List<DirectGlobalMessageSearchHitResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            hits.Add(new DirectGlobalMessageSearchHitResponse(
+                Guid.Parse(reader.GetString(0)),
+                new UserSummaryResponse(
+                    Guid.Parse(reader.GetString(1)),
+                    reader.GetString(2),
+                    reader.GetString(3),
+                    reader.GetString(4)),
+                new MessageResponse(
+                    Guid.Parse(reader.GetString(5)),
+                    reader.GetString(6),
+                    Guid.Parse(reader.GetString(7)),
+                    Guid.Parse(reader.GetString(8)),
+                    Guid.Parse(reader.GetString(9)),
+                    reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
+                    reader.IsDBNull(11) ? null : Guid.Parse(reader.GetString(11)),
+                    DateTimeOffset.Parse(reader.GetString(12)),
+                    reader.IsDBNull(13) ? null : DateTimeOffset.Parse(reader.GetString(13)),
+                    reader.IsDBNull(14) ? null : DateTimeOffset.Parse(reader.GetString(14)))));
+        }
+
+        return new DirectGlobalMessageSearchResponse(
+            normalizedQuery,
+            hits);
+    }
+
     public async Task<DirectMessageSearchResponse> SearchDirectMessagesAsync(
         Guid actorUserId,
         Guid conversationId,
