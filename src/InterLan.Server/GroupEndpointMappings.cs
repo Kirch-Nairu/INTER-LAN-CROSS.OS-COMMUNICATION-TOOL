@@ -375,6 +375,153 @@ public static class GroupEndpointMappings
             }
         }).RequireRateLimiting("message");
 
+        app.MapGet("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}", async (
+            Guid groupId,
+            Guid messageId,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                return Results.Ok(await groups.GetGroupMessageByIdAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+        });
+
+        app.MapPut("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}", async (
+            Guid groupId,
+            Guid messageId,
+            EditMessageRequest request,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            IHubContext<ChatHub> hub,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                var edited = await groups.EditGroupMessageAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    request,
+                    cancellationToken);
+
+                var memberIds = await groups.GetActiveGroupMemberIdsAsync(
+                    principal.UserId,
+                    groupId,
+                    cancellationToken);
+
+                foreach (var memberId in memberIds)
+                {
+                    await hub.Clients.Group(ChatHub.UserGroup(memberId))
+                        .SendAsync(
+                            "MessageEdited",
+                            edited,
+                            cancellationToken);
+                }
+
+                return Results.Ok(edited);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+            catch (ArgumentException exception)
+            {
+                return Results.BadRequest(new { error = exception.Message });
+            }
+        }).RequireRateLimiting("message");
+
+        app.MapDelete("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}", async (
+            Guid groupId,
+            Guid messageId,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            GroupStore groups,
+            IHubContext<ChatHub> hub,
+            CancellationToken cancellationToken) =>
+        {
+            var principal = await AuthorizationHelpers.GetPrincipalAsync(
+                context,
+                enrollment,
+                cancellationToken);
+            if (principal is null)
+                return Results.Unauthorized();
+
+            try
+            {
+                var deleted = await groups.DeleteGroupMessageAsync(
+                    principal.UserId,
+                    groupId,
+                    messageId,
+                    cancellationToken);
+
+                var memberIds = await groups.GetActiveGroupMemberIdsAsync(
+                    principal.UserId,
+                    groupId,
+                    cancellationToken);
+
+                foreach (var memberId in memberIds)
+                {
+                    await hub.Clients.Group(ChatHub.UserGroup(memberId))
+                        .SendAsync(
+                            "GroupMessageDeleted",
+                            deleted,
+                            cancellationToken);
+                }
+
+                return Results.Ok(deleted);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+            catch (KeyNotFoundException)
+            {
+                return Results.NotFound();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+        }).RequireRateLimiting("message");
+
         app.MapPost("/api/v1/groups/{groupId:guid}/messages/{messageId:guid}/delivered", async (
             Guid groupId,
             Guid messageId,
