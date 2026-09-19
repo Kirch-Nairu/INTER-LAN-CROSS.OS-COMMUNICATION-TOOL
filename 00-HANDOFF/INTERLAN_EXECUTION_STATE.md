@@ -10,119 +10,93 @@ Repository:
 Technical Authority:
 **Kirch Ivan Balite**
 
-Accepted main:
-`91c010dd3bd448fc9bd5ec9159e94262569e3e79`
+KIRION doctrine:
+`Kirch-Nairu/KIRION-FORGE@44eb57e5b45b343be0033bf22a7a5e74d543c01a`
+
+Accepted main observed at P3 governance reconciliation:
+`d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`
 
 Active phase:
-**P2 — Direct Messaging + Durable Pairing**
+**P3 — Group Chat**
 
 Active branch:
-`KIRCH-INTERLAN-P2-DIRECT-MESSAGING`
+`KIRCH-INTERLAN-P3-GROUP-CHAT`
 
-C075 checkpoint source head:
-`926ffffdbc437a85ebb1c9109ee85acc2a524383`
+P3 pre-governance source anchor:
+`939fa64e1613ded90366c01d18928493024f7b0b`
 
-P2 issue:
-`#6 — Direct messaging, realtime delivery, history and reconnect`
-
-P2 PR:
-`#7 — P2: direct messaging, realtime delivery and persistent pairing`
+Exact current branch HEAD must be read directly from Git/GitHub before mutation.
 
 P3 issue:
 `#8 — Group chat, membership authority and realtime group delivery`
 
-## Proven before current code wave
+## Recovery reading order
 
-- persistent TLS certificate and Windows-compatible private-key loading;
-- bootstrap/owner authority;
-- invite/join/approval;
-- token hashing;
-- approved-device persistence;
-- pairing-state persistence;
-- session renewal without re-enrollment;
-- canonical DMs;
-- DM IDOR rejection;
-- durable ordered messages;
-- duplicate suppression;
-- SignalR delivery;
-- offline cursor catch-up;
-- message history survives restart.
+1. `AGENTS.md`
+2. `.forge/AUTHORITY.md`
+3. `.forge/SSOT_CURRENT.md`
+4. `.forge/NEST.md`
+5. `.forge/handoffs/P3_CODE_WRITER_CONTINUATION.md`
+6. `00-HANDOFF/INTERLAN_V1_CODE_CAMPAIGN.md`
+7. `00-HANDOFF/INTERLAN_INVARIANTS.md`
+8. `00-HANDOFF/INTERLAN_KNOWN_RISKS.md`
 
-## Implemented in current P2 hardening wave
+## Accepted predecessor state
 
-- SQLite WAL + busy-timeout baseline;
-- per-client rate-limit partition keys;
-- realtime connection registry keyed by session/device;
-- active realtime abort on device/session revocation;
-- recipient-only delivered/read receipt semantics;
-- receipt query API;
-- multi-device attachment to one durable user identity;
-- device credential lifecycle timestamps;
-- device credential rotation;
-- rotation revokes prior device sessions/credential;
-- client-side credential rotation persistence;
-- canonical server runtime-settings contract;
-- SQLite-backed server settings store;
-- explicit configuration-override precedence;
-- Kestrel/bootstrap/discovery use resolved settings;
-- system/enrollment/messaging endpoint extraction;
-- reusable in-process `InterLanServerHost`;
-- reusable `InterLanServerInstance` lifecycle;
-- desktop `OwnerServerRuntime` integration spine;
-- all active verification projects included in `InterLan.sln`;
-- shared `InterLan.Testing` library;
-- shared repository/artifact discovery;
-- shared loopback HTTPS client;
-- resilient retrying server-process harness;
-- P2 realtime smoke migrated to the shared server harness;
-- native realtime test transport now prefers Authorization header over query token;
-- framework request-start logging suppressed to reduce browser access-token log exposure.
+P2 is represented by accepted main `d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`.
 
-## C075 checkpoint result
+Historical P2 local proof records remain useful history, but they are not P3 evidence.
 
-**PASS — operator-local Windows replay at `3a1805fb7c985b83ca72bd2c6f4353abcc435f1e`.**
+## P3 source implemented
 
-Passed:
-1. `dotnet build InterLan.sln -c Release`
-2. `InterLan.P1Checks`
-3. `InterLan.P1NetworkSmoke`
-4. `InterLan.P2Checks`
-5. `InterLan.P2RealtimeSmoke`
+`SOURCE INSPECTED ONLY` at governance reconciliation:
+- group metadata policy and update paths;
+- creator-as-OWNER creation;
+- OWNER / ADMIN / MEMBER server authority;
+- add/remove/restore/promote/demote behavior;
+- durable group system events and audit;
+- group message persistence and deterministic ordering;
+- idempotent client message IDs;
+- reply validation;
+- forward cursor catch-up;
+- reverse-paged recent history/backfill;
+- current-membership realtime targeting;
+- group typing authorization;
+- delivered/read receipts;
+- sender-only edit/delete and deletion tombstones;
+- typed HTTP/realtime client support;
+- P3 core/realtime/concurrency checks;
+- P3 migration coverage;
+- aggregate suite registration.
 
-The replay proved the current pairing, credential rotation, multi-device identity, SQLite WAL policy, recipient receipt semantics, DM persistence, realtime delivery, offline catch-up, and immediate revocation paths on Windows.
+## P3 exit contract
 
-Forward implementation is authorized toward the C100 architecture checkpoint.
+P3 cannot close until:
+- creator is OWNER;
+- non-members cannot read/send;
+- unauthorized members cannot mutate authority;
+- removed users lose HTTP and realtime access immediately;
+- group messages persist before broadcast;
+- duplicate message IDs remain idempotent;
+- history survives restart;
+- realtime targets current membership only;
+- concurrency and IDOR tests pass.
 
-## C100 architecture checkpoint
+## Validation status at governance reconciliation
 
-C100 source head before this review:
+- Git authority: OBSERVED
+- P3 source: SOURCE INSPECTED ONLY
+- build: NOT RUN in this reconciliation
+- P3 core checks: NOT RUN in this reconciliation
+- P3 realtime smoke: NOT RUN in this reconciliation
+- P3 concurrency checks: NOT RUN in this reconciliation
+- P3 acceptance: NOT GRANTED
 
-`bc56986096f4e40690f8bb35ebfb3d7666363450`
+No conversation-memory PASS claim is authoritative.
 
-The C075→C100 wave implemented:
-- P1 network smoke migration to the shared server-process harness;
-- concurrent canonical DM creation checks;
-- concurrent unique-send durability checks;
-- concurrent duplicate-send idempotency checks;
-- conflicting idempotency-key replay rejection;
-- rate-limit partition isolation checks;
-- historical schema fixture support;
-- migration upgrade checks through current schema;
-- desktop in-process owner-host lifecycle checks;
-- aggregate P0–P2 local suite runner.
+## Current priority
 
-**C100 local replay is required before the next large wave.**
-
-After C100 passes, remaining P2 work includes:
-- deeper SQLite contention/torture beyond the current concurrency checks;
-- end-to-end rate-limit behavior rather than partition-key unit proof only;
-- browser realtime credential policy;
-- mutable owner settings with explicit restart semantics;
-- migration data-preservation fixtures, not schema-only upgrade proof;
-- secure-storage platform adapters for macOS/Linux;
-- typed client SDK expansion beyond pairing/session restore;
-- DM pagination/conversation projections/unread state;
-- continued correctness hardening toward C125/C150.
+Audit and harden P3 against its exit conditions, especially concurrency and authorization races; keep repository-local executable proof synchronized; do not divert into new CI/CD architecture.
 
 ## Deferred
 
@@ -132,5 +106,3 @@ After C100 passes, remaining P2 work includes:
 - release publishing;
 - signing/notarization automation;
 - branch-protection engineering.
-
-Existing workflows may run as passive portability signals only.
