@@ -35,6 +35,19 @@ async Task ExpectArgumentAsync(Func<Task> action, string name)
     }
 }
 
+async Task ExpectInvalidOperationAsync(Func<Task> action, string name)
+{
+    try
+    {
+        await action();
+        Check(false, name);
+    }
+    catch (InvalidOperationException)
+    {
+        Check(true, name);
+    }
+}
+
 var root = Path.Combine(
     Path.GetTempPath(),
     "interlan-p3-checks-" + Guid.NewGuid().ToString("N"));
@@ -220,6 +233,16 @@ try
     await ExpectUnauthorizedAsync(
         async () =>
         {
+            await groups.SendGroupMessageAsync(
+                memberId,
+                created.GroupId,
+                new SendMessageRequest(Guid.NewGuid(), "should be rejected"));
+        },
+        "removed member immediately loses group send authority");
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
             await groups.RemoveMemberAsync(ownerId, created.GroupId, ownerId);
         },
         "group owner cannot remove owner membership");
@@ -232,6 +255,76 @@ try
     Check(
         restored.Status == "ADDED" && restored.Role == "MEMBER",
         "removed membership can be restored without duplicate row");
+
+    var firstClientMessageId = Guid.NewGuid();
+    var firstMessage = await groups.SendGroupMessageAsync(
+        ownerId,
+        created.GroupId,
+        new SendMessageRequest(firstClientMessageId, "group message one"));
+
+    Check(
+        firstMessage.Created &&
+        firstMessage.Message.ScopeType == "GROUP" &&
+        firstMessage.Message.ScopeId == created.GroupId,
+        "authorized group message persists in group scope");
+
+    var duplicateMessage = await groups.SendGroupMessageAsync(
+        ownerId,
+        created.GroupId,
+        new SendMessageRequest(firstClientMessageId, "group message one"));
+
+    Check(
+        !duplicateMessage.Created &&
+        duplicateMessage.Message.MessageId == firstMessage.Message.MessageId,
+        "duplicate group client message ID is idempotent");
+
+    await ExpectInvalidOperationAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                ownerId,
+                created.GroupId,
+                new SendMessageRequest(firstClientMessageId, "conflicting replay"));
+        },
+        "conflicting group idempotency replay is rejected");
+
+    var reply = await groups.SendGroupMessageAsync(
+        memberId,
+        created.GroupId,
+        new SendMessageRequest(
+            Guid.NewGuid(),
+            "group reply",
+            firstMessage.Message.MessageId));
+
+    Check(
+        reply.Created &&
+        reply.Message.ReplyToMessageId == firstMessage.Message.MessageId,
+        "group reply targets active message in same group");
+
+    var page = await groups.GetGroupHistoryPageAsync(
+        adminId,
+        created.GroupId,
+        afterMessageId: null,
+        limit: 1);
+
+    Check(
+        page.Items.Count == 1 &&
+        page.Items[0].MessageId == firstMessage.Message.MessageId &&
+        page.HasMore &&
+        page.NextAfterMessageId == firstMessage.Message.MessageId,
+        "group history exposes deterministic forward cursor page");
+
+    var catchupPage = await groups.GetGroupHistoryPageAsync(
+        adminId,
+        created.GroupId,
+        firstMessage.Message.MessageId,
+        limit: 10);
+
+    Check(
+        catchupPage.Items.Count == 1 &&
+        catchupPage.Items[0].MessageId == reply.Message.MessageId &&
+        !catchupPage.HasMore,
+        "group history cursor catches up without duplicate messages");
 
     var events = await groups.ListGroupEventsAsync(
         ownerId,
@@ -266,6 +359,18 @@ try
         afterRestart.Members.Any(member =>
             member.UserId == memberId && member.Role == "MEMBER"),
         "group membership authority survives restart");
+
+    var restartHistory = await restartedGroups.GetGroupHistoryAsync(
+        memberId,
+        created.GroupId,
+        afterMessageId: null,
+        limit: 100);
+
+    Check(
+        restartHistory.Count == 2 &&
+        restartHistory[0].MessageId == firstMessage.Message.MessageId &&
+        restartHistory[1].MessageId == reply.Message.MessageId,
+        "group message history survives restart in deterministic order");
 
     var ownerGroups = await restartedGroups.ListGroupsAsync(ownerId);
     Check(
