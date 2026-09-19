@@ -208,6 +208,15 @@ try
         duplicateRace.Select(result => result.Message.MessageId).Distinct().Count() == 1,
         "concurrent duplicate client message IDs collapse to one durable message");
 
+    Check(await ThrowsAsync<InvalidOperationException>(() =>
+        chat.SendDirectMessageAsync(
+            alice,
+            ac.ConversationId,
+            new SendMessageRequest(
+                duplicateClientMessageId,
+                "different-payload-for-same-idempotency-key"))),
+        "idempotency key replay with different content fails closed");
+
     var afterDuplicateRace = await chat.GetDirectHistoryAsync(
         carol,
         ac.ConversationId,
