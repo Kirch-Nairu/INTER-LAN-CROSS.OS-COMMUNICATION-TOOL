@@ -71,3 +71,8 @@ public sealed record ConversationReadResponse(
     Guid ConversationId,
     int MarkedCount,
     DateTimeOffset ReadUtc);
+
+public sealed record MessageReceiptsChangedResponse(
+    Guid ConversationId,
+    Guid MessageId,
+    IReadOnlyList<MessageReceiptResponse> Receipts);
