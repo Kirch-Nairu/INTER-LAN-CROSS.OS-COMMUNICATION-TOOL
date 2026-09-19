@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Net.Security;
-using System.Security.Cryptography;
 using InterLan.Contracts;
 
 namespace InterLan.Application;
@@ -122,32 +120,7 @@ public sealed class PairedClientSessionManager(
         }
     }
 
-    public static HttpClient CreatePinnedHttpClient(ClientPairingState pairing)
-    {
-        var expectedFingerprint = Convert.FromHexString(pairing.PinnedCertificateSha256);
-
-        var handler = new SocketsHttpHandler
-        {
-            UseProxy = false,
-            ConnectTimeout = TimeSpan.FromSeconds(5),
-            SslOptions = new SslClientAuthenticationOptions
-            {
-                RemoteCertificateValidationCallback = (_, certificate, _, _) =>
-                {
-                    if (certificate is null)
-                        return false;
-
-                    var actual = SHA256.HashData(certificate.GetRawCertData());
-                    return actual.Length == expectedFingerprint.Length &&
-                           CryptographicOperations.FixedTimeEquals(actual, expectedFingerprint);
-                }
-            }
-        };
-
-        return new HttpClient(handler)
-        {
-            BaseAddress = new Uri(pairing.ServerUri),
-            Timeout = TimeSpan.FromSeconds(15)
-        };
-    }
+    public static HttpClient CreatePinnedHttpClient(
+        ClientPairingState pairing) =>
+        PinnedTransportFactory.CreateHttpClient(pairing);
 }
