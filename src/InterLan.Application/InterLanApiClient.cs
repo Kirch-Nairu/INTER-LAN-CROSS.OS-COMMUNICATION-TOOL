@@ -79,6 +79,24 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Message response was empty.");
     }
 
+    public async Task<MessagePageResponse> GetDirectHistoryPageAsync(
+        Guid conversationId,
+        Guid? afterMessageId = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        var path = $"/api/v1/direct/{conversationId:D}/messages/page?limit={limit}";
+        if (afterMessageId is { } cursor)
+            path += $"&afterMessageId={cursor:D}";
+
+        return await _httpClient.GetFromJsonAsync<MessagePageResponse>(
+            path,
+            cancellationToken)
+            ?? throw new InvalidDataException("Message page response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
