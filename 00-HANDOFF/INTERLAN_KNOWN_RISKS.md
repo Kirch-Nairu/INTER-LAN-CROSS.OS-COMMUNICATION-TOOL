@@ -1,145 +1,95 @@
 # INTER-LAN KNOWN RISKS AND DEBUG-HOLE REGISTER
 
-This register exists so deferred problems cannot disappear from context.
+This register keeps material risks visible without turning governance into bureaucracy.
 
-Risk state must be reconciled against observable source/runtime. Historical items are retained and marked where current source appears to address them.
+## R1 — Desktop/server composition
 
-## R1 — Desktop owner lifecycle composition
-
-Status: PARTIALLY ADDRESSED IN SOURCE / P6 ACCEPTANCE STILL OPEN
-
-Reusable `InterLanServerHost` and desktop owner-runtime integration spine exist from P2, but full product composition remains a P6 acceptance responsibility.
+P6 remains responsible for complete owner desktop/product composition. Reusable server-host foundations already exist.
 
 ## R2 — Configuration authority divergence
 
-Status: PARTIALLY ADDRESSED IN SOURCE
-
-P2 added canonical runtime-settings foundations and SQLite-backed settings. Continue preventing divergence among persisted settings, environment overrides, Kestrel, discovery, storage, and later archive configuration.
+Keep persisted settings, explicit overrides, Kestrel, discovery, storage, and later archive configuration aligned.
 
 ## R3 — Verification topology drift
 
-Status: ADDRESSED IN SOURCE, MUST REMAIN GUARDED
+P3 verification projects are in the solution/aggregate suite. Future changes must keep executable checks buildable and reachable.
 
-The solution and aggregate suite include active P3 verification projects. Future phases must keep repository-local checks inside the complete build/aggregate topology.
+## R4 — Network-smoke lifecycle
 
-## R4 — Network-smoke process/port races
+Shared harness exists, but process/port lifecycle failures must still be classified instead of hidden.
 
-Status: PARTIALLY ADDRESSED
+## R5 — Realtime revocation
 
-Shared server-process/network harness exists from P2. Continue treating real process/port lifecycle failures as harness/runtime evidence, not as a reason to weaken product tests.
-
-## R5 — Realtime revocation gap
-
-Status: ADDRESSED FOR P2 DEVICES; P3 MEMBERSHIP REVOCATION REMAINS CRITICAL
-
-P2 added active connection revocation. P3 additionally depends on current-membership targeting and per-invocation membership checks so removed group members lose group realtime authority immediately.
-
-Risk to keep attacking:
-- existing connected sockets retained in user-global transport groups;
-- any new group event path that broadcasts without resolving current membership;
-- any hub invocation that trusts connection-time membership.
+P3 requires current-membership targeting and per-invocation authorization. Any event path that can reach a removed member is a stop-feature-expansion defect.
 
 ## R6 — Receipt semantics
 
-Status: IMPLEMENTED IN SOURCE / NOT VERIFIED IN THIS RECONCILIATION
+Group receipts must preserve recipient-only delivered/read semantics and current membership authority.
 
-Direct and group receipt paths distinguish recipient delivery/read semantics. Preserve sender restrictions and current group authority.
+## R7 — SQLite concurrency and group authority races
 
-## R7 — Multi-device identity
+**ACTIVE HIGH-PRIORITY P3 RISK**
 
-Status: IMPLEMENTED IN P2 SOURCE / HISTORICAL RISK
-
-P2 supports additional approved devices for an existing user identity. Later client/product work must preserve this behavior.
-
-## R8 — SQLite concurrency and group authority races
-
-Status: ACTIVE P3 HIGH-PRIORITY RISK
-
-WAL/busy-timeout baseline and P3 concurrency checks exist.
-
-P3 still must prove that concurrent:
-- membership add/restore;
+Attack:
+- concurrent membership add/restore;
 - remove vs role mutation;
-- role mutation vs send;
+- remove vs send;
 - duplicate group send;
-- receipt upserts;
-- history reads during writes
+- concurrent receipt upserts;
+- history reads during writes.
 
-do not create duplicate authority, stale authorization, uncaught lock races, or inconsistent final state.
+Required outcome:
+- no duplicate authority;
+- no stale authorization;
+- no uncaught lock race treated as success;
+- deterministic final state.
 
-Any race that can violate group authority is a stop-feature-expansion defect.
+## R8 — Web/product composition
 
-## R9 — Web asset composition
+Deferred to P6. Final product output must not omit browser assets.
 
-Status: DEFERRED TO P6 PRODUCT COMPOSITION
+## R9 — Dependency reproducibility
 
-Do not let final product publish omit web/Android assets. Locked frontend dependency and deterministic composition remain required before P6 acceptance.
+Maintain deterministic repository-native dependency policy. Workflow consolidation belongs after P7 freeze.
 
-## R10 — Dependency reproducibility
+## R10 — Workflow sediment
 
-Status: OPEN ACROSS CAMPAIGN
+Do not add P3–P7 workflow architecture. Existing Actions are passive signals only.
 
-Maintain deterministic SDK/NuGet/frontend dependency policy in repository-native tooling. Workflow pinning belongs to the final CI/CD wave.
+## R11 — Telegram nondeterminism
 
-## R11 — Workflow sediment
+Future P5 mandatory proof uses a deterministic archive abstraction/fake. Live Telegram remains optional staging evidence.
 
-Status: INTENTIONALLY DEFERRED
+## R12 — Filesystem portability
 
-Do not add P3–P7 workflow architecture. Existing workflows are passive signals only. Consolidation occurs after P7 code freeze.
+Future P4/P7 risk: path rules, Unicode, case sensitivity, locking, permissions, atomic replacement.
 
-## R12 — Live Telegram nondeterminism
+## R13 — Unix pairing-state protection
 
-Status: FUTURE P5
+Platform secure-storage policy remains open for final native acceptance.
 
-Mandatory archive proof must use deterministic abstraction/fake. Live Telegram is optional staging evidence.
+## R14 — Migration matrix regression
 
-## R13 — Cross-platform filesystem behavior
+P3 adds migration `008_p3_group_authority.sql`. Historical upgrades must remain data-preserving, not just schema-creating.
 
-Status: FUTURE P4/P7
+## R15 — Group ownership policy boundary
 
-Path, Unicode, locking, permissions, case sensitivity, and atomic replace behavior remain portability risks.
+Current P3 keeps creator OWNER immutable through ordinary remove/role mutation. Do not invent owner transfer/removal/multi-owner semantics without an explicit product decision.
 
-## R14 — Unix pairing-state protection
+## R16 — Group history visibility boundary
 
-Status: OPEN / PLATFORM POLICY REQUIRED
+Current contract authorizes current active members to read group history. No "history only since join" rule exists. Do not invent one silently.
 
-Windows DPAPI is stronger than the existing Unix fallback. macOS Keychain / Linux Secret Service policy remains required before final native acceptance.
+## R17 — Governance drift
 
-## R15 — Migration matrix regression
+A P3 implementation wave advanced while old P2 state files remained stale. A subsequent correction mistakenly imported `.forge/` product memory from the wrong Forge repository.
 
-Status: ACTIVE CONTINUOUS RISK
-
-P3 introduced migration `008_p3_group_authority.sql` and updated migration checks. Historical accepted schema upgrades must continue to remain data-preserving, not merely schema-creating.
-
-## R16 — P3 durable-memory / authority drift
-
-Status: CORRECTIVE GOVERNANCE WAVE IN PROGRESS
-
-Observed defect:
-- P3 source advanced while root `AGENTS.md`, execution state, and commit ledger still described P2;
-- no repository-local KIRION `.forge` memory existed.
-
-Impact:
-- a fresh agent could not reconstruct current P3 authority without conversation replay;
-- implementation could drift from accepted phase boundaries;
-- validation/promotion claims could become ambiguous.
-
-Required:
-- maintain `.forge/AUTHORITY.md`, `.forge/SSOT_CURRENT.md`, `.forge/NEST.md`, engineering log, active handoff, execution state, ledger, and risks as durable project memory;
-- always verify observable Git before substantial mutation.
-
-## R17 — Group ownership lifecycle policy
-
-Status: POLICY BOUNDARY TO PRESERVE
-
-Current P3 source keeps creator OWNER immutable through ordinary remove/role-mutation paths. Do not invent owner transfer, owner removal, or multi-owner semantics unless the Technical Authority/phase contract explicitly adds them.
-
-## R18 — Group history visibility semantics
-
-Status: POLICY BOUNDARY TO PRESERVE
-
-Current phase contract requires active members to be authorized for group history but does not establish "history only since join" semantics. Do not silently add temporal visibility restrictions without an explicit product decision.
+Correct model:
+- full doctrine remains in `Operation-FORGE.kirion`;
+- INTER-LAN keeps a thin active instruction layer, lane record, and handoffs;
+- repo truth outranks memory;
+- old conversation summaries are never Git authority.
 
 ## Evidence note
 
-This risk reconciliation is based on current repository source inspection and Git observation. It is not a substitute for executable P3 validation.
+Risk status is based on current source/Git inspection unless a specific executable gate is recorded.

@@ -6,87 +6,56 @@ No fake commits. No whitespace farming. No empty commits.
 
 ## Historical
 
-| Phase | Status | Preserved granular target |
-| --- | --- | ---: |
-| P0 | Accepted, squash-merged | historical exception |
-| P1 | Accepted, squash-merged | historical exception |
-| P2 | Accepted onto current main authority | preserved history exists on accepted main lineage |
+| Phase | Status |
+| --- | --- |
+| P0 | accepted historical phase |
+| P1 | accepted historical phase |
+| P2 | accepted onto current main authority |
 
-## Active campaign
+## Active
 
-| Phase | Target | Current observed baseline | Status |
+| Phase | Target | Observed baseline | Status |
 | --- | ---: | ---: | --- |
-| P3 | 300+ | 65 commits ahead of accepted main at pre-governance source anchor | active — source implementation + governance reconciliation |
+| P3 | 300+ meaningful | 65 commits ahead of accepted main at `939fa64e...` before governance correction | ACTIVE |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
 | P6 | 300+ | 0 | not started |
 | P7 | 300+ | 0 | not started |
 
-Accepted main observed before P3 governance reconciliation:
+Accepted main:
+`d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`
 
-`main@d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`
-
-P3 active branch:
-
+Active P3 branch:
 `KIRCH-INTERLAN-P3-GROUP-CHAT`
 
-P3 pre-governance source anchor:
+The exact count and HEAD are movable facts and must be read directly from Git. This ledger records milestone anchors, not a self-referential attempt to contain its own commit SHA.
 
-`939fa64e1613ded90366c01d18928493024f7b0b`
+## P3 meaningful slices already present
 
-At that anchor:
-- ahead of main: 65
-- behind main: 0
-
-The exact current commit count must be re-observed from Git/GitHub after later commits. Do not make this tracked file chase its own containing commit SHA.
-
-## P3 completed source slices observed
-
-- group metadata policy;
-- creator OWNER authority;
-- membership add/remove/restore;
-- role promotion/demotion boundaries;
-- durable group events/audit;
-- message persistence/idempotency/replies;
-- deterministic history/cursor catch-up;
-- reverse-paged recent history/backfill;
-- realtime current-membership targeting;
-- typing authorization;
+- group metadata;
+- membership and role authority;
+- durable authority events/audit;
+- group messages/idempotency/replies;
+- history/cursor/recent backfill;
+- realtime delivery/typing;
 - receipts;
-- sender-only edit/delete/tombstones;
-- typed HTTP/realtime client surfaces;
+- edit/delete/tombstones;
+- typed clients;
 - migration checks;
-- P3 core checks;
-- P3 realtime smoke;
-- P3 concurrency checks;
-- aggregate suite registration.
+- core checks;
+- realtime smoke;
+- concurrency checks;
+- aggregate suite wiring.
 
-## P3 evidence boundary
+## Checkpoint use
 
-At the governance reconciliation:
-- source state was inspected;
-- no build or P3 executable suite was run as part of the reconciliation;
-- P3 is not accepted or promoted.
+The 25/50/100 cadence is a review rhythm, not permission to stop production work for CI babysitting.
 
-## Campaign checkpoints
+At each coherent wave, reconcile:
+- observed branch/HEAD;
+- meaningful source slices;
+- blockers;
+- gates actually run;
+- next in-scope engineering slice.
 
-The 25/50/100 cadence remains a review cadence, not a reason to stop production coding for CI babysitting.
-
-For P3:
-- C025: crossed in implementation history; no independent acceptance implied.
-- C050: crossed in implementation history; no independent acceptance implied.
-- C075: upcoming meaningful-commit review boundary after governance commits.
-- C100: architecture/invariant review boundary.
-- later checkpoints continue per `INTERLAN_V1_CODE_CAMPAIGN.md`.
-
-## Ledger rule
-
-After each coherent implementation wave, reconcile:
-- current phase and branch;
-- observed ahead/behind count;
-- source slices completed;
-- next slice;
-- blocker count;
-- validation status.
-
-Observable Git/runtime wins over stale ledger text.
+Technical completion outranks the counter.

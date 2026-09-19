@@ -1,3 +1,10 @@
+> **Rapid-build governance boundary**
+>
+> This product repository is governed using `Kirch-Nairu/Operation-FORGE.kirion@50e0646a303cba8cc11959a2974b2d84cbc515bd`.
+> Project Second Brain supplies cognition/lane discipline; Forge supplies mutation/acceptance/promotion authority.
+> Full doctrine stays outside INTER-LAN. This repo keeps only the active instruction layer, project-specific campaign/state/risk records, and lane handoffs.
+> Repository truth outranks conversation memory. No validation is claimed unless actually run.
+
 # INTER-LAN V1 CODE CAMPAIGN
 
 Technical Authority: **Kirch Ivan Balite**
