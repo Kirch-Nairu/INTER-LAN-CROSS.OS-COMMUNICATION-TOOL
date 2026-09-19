@@ -402,6 +402,19 @@ public sealed class InterLanApiClient(HttpClient httpClient)
         _httpClient.DefaultRequestHeaders.Authorization = null;
     }
 
+    public async Task<UserDirectorySearchResponse> SearchUsersAsync(
+        string query,
+        int limit = 25,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<UserDirectorySearchResponse>(
+            $"/api/v1/users/search?q={Uri.EscapeDataString(query)}&limit={limit}",
+            cancellationToken)
+            ?? throw new InvalidDataException("User directory search response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
