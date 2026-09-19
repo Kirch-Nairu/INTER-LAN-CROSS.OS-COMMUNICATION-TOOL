@@ -194,6 +194,11 @@ var readReceiptEvent =
     new TaskCompletionSource<GroupMessageReceiptsChangedResponse>(
         TaskCreationOptions.RunContinuationsAsynchronously);
 
+var editedEvent = new TaskCompletionSource<MessageResponse>(
+    TaskCreationOptions.RunContinuationsAsynchronously);
+var deletedEvent = new TaskCompletionSource<GroupMessageDeletedResponse>(
+    TaskCreationOptions.RunContinuationsAsynchronously);
+
 var memberMessageCount = 0;
 var firstMessageEvent = new TaskCompletionSource<MessageResponse>(
     TaskCreationOptions.RunContinuationsAsynchronously);
@@ -221,6 +226,25 @@ ownerHub.On<GroupMessageReceiptsChangedResponse>(
         {
             readReceiptEvent.TrySetResult(payload);
         }
+    });
+
+memberHub.On<MessageResponse>(
+    "MessageEdited",
+    message =>
+    {
+        if (message.ScopeType == "GROUP" &&
+            message.ScopeId == group.GroupId)
+        {
+            editedEvent.TrySetResult(message);
+        }
+    });
+
+memberHub.On<GroupMessageDeletedResponse>(
+    "GroupMessageDeleted",
+    payload =>
+    {
+        if (payload.GroupId == group.GroupId)
+            deletedEvent.TrySetResult(payload);
     });
 
 memberHub.On<MessageResponse>(
@@ -296,6 +320,24 @@ if (Volatile.Read(ref memberMessageCount) != 1)
 
 Console.WriteLine("PASS idempotent group retry does not duplicate persistence or broadcast");
 
+using (var edit = await ownerHttp.PutAsJsonAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/{persisted.MessageId:D}",
+    new EditMessageRequest("durable group hello edited")))
+{
+    edit.EnsureSuccessStatusCode();
+}
+
+var editedRealtime = await editedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+if (editedRealtime.MessageId != persisted.MessageId ||
+    editedRealtime.Body != "durable group hello edited" ||
+    editedRealtime.EditedUtc is null)
+{
+    Console.Error.WriteLine("FAIL group edit realtime payload mismatch");
+    return 1;
+}
+
+Console.WriteLine("PASS group sender edit persists and reaches current members");
+
 using (var delivered = await memberHttp.PostAsync(
     $"/api/v1/groups/{group.GroupId:D}/messages/{persisted.MessageId:D}/delivered",
     content: null))
@@ -312,6 +354,22 @@ using (var read = await memberHttp.PostAsync(
 
 await readReceiptEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
 Console.WriteLine("PASS group read receipt reaches current members in realtime");
+
+using (var delete = await ownerHttp.DeleteAsync(
+    $"/api/v1/groups/{group.GroupId:D}/messages/{persisted.MessageId:D}"))
+{
+    delete.EnsureSuccessStatusCode();
+}
+
+var deletedRealtime = await deletedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+if (deletedRealtime.MessageId != persisted.MessageId ||
+    deletedRealtime.GroupId != group.GroupId)
+{
+    Console.Error.WriteLine("FAIL group delete realtime payload mismatch");
+    return 1;
+}
+
+Console.WriteLine("PASS group sender delete persists and reaches current members");
 
 using var removeMember = await adminHttp.DeleteAsync(
     $"/api/v1/groups/{group.GroupId:D}/members/{memberEnrollment.UserId:D}");
