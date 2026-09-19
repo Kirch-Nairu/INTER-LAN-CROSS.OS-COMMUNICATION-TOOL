@@ -262,6 +262,17 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             await join.ExecuteNonQueryAsync(cancellationToken);
         }
 
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            null,
+            "JOIN_REQUESTED",
+            "JOIN_REQUEST",
+            requestId,
+            "{}",
+            now,
+            cancellationToken);
+
         transaction.Commit();
         return new SubmitJoinResponse(requestId, "PENDING");
     }
@@ -318,6 +329,16 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             reject.Parameters.AddWithValue("$utc", now.ToString("O"));
             reject.Parameters.AddWithValue("$id", requestId.ToString("D"));
             await reject.ExecuteNonQueryAsync(cancellationToken);
+            await AppendAuditAsync(
+                connection,
+                transaction,
+                ownerUserId,
+                "JOIN_REJECTED",
+                "JOIN_REQUEST",
+                requestId,
+                "{}",
+                now,
+                cancellationToken);
             transaction.Commit();
             return new JoinDecisionResponse(requestId, "REJECTED", null, null);
         }
