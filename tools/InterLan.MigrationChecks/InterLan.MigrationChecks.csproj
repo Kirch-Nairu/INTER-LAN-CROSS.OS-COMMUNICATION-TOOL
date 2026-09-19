@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../InterLan.Testing/InterLan.Testing.csproj" />
+    <ProjectReference Include="../../src/InterLan.Infrastructure/InterLan.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
