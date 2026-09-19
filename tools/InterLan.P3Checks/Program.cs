@@ -361,6 +361,15 @@ try
         },
         "removed member immediately loses group send authority");
 
+    var deliveryTargetsAfterRemoval =
+        await groups.GetGroupDeliveryTargetUserIdsAsync(created.GroupId);
+
+    Check(
+        !deliveryTargetsAfterRemoval.Contains(memberId) &&
+        deliveryTargetsAfterRemoval.Contains(ownerId) &&
+        deliveryTargetsAfterRemoval.Contains(adminId),
+        "server delivery target projection excludes removed members without actor reauthorization");
+
     await ExpectUnauthorizedAsync(
         async () =>
         {
@@ -599,10 +608,17 @@ try
         reply.Message.ReplyToMessageId == firstMessage.Message.MessageId,
         "group reply targets active message in same group");
 
-    await groups.MarkGroupMessageDeliveredAsync(
+    var deliveredMutationReceipts = await groups.MarkGroupMessageDeliveredAsync(
         memberId,
         created.GroupId,
         firstMessage.Message.MessageId);
+
+    Check(
+        deliveredMutationReceipts.Count == 1 &&
+        deliveredMutationReceipts[0].UserId == memberId &&
+        deliveredMutationReceipts[0].DeliveredUtc is not null &&
+        deliveredMutationReceipts[0].ReadUtc is null,
+        "group delivery mutation returns its durable receipt snapshot");
 
     var deliveredReceipts = await groups.GetGroupMessageReceiptsAsync(
         ownerId,
@@ -616,10 +632,17 @@ try
         deliveredReceipts[0].ReadUtc is null,
         "group delivery receipt records actual recipient acknowledgement");
 
-    await groups.MarkGroupMessageReadAsync(
+    var readMutationReceipts = await groups.MarkGroupMessageReadAsync(
         memberId,
         created.GroupId,
         firstMessage.Message.MessageId);
+
+    Check(
+        readMutationReceipts.Count == 1 &&
+        readMutationReceipts[0].UserId == memberId &&
+        readMutationReceipts[0].DeliveredUtc is not null &&
+        readMutationReceipts[0].ReadUtc is not null,
+        "group read mutation returns its durable receipt snapshot");
 
     var readReceipts = await groups.GetGroupMessageReceiptsAsync(
         adminId,
