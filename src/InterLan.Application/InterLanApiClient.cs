@@ -50,12 +50,13 @@ public sealed class InterLanApiClient(HttpClient httpClient)
     }
 
     public async Task<IReadOnlyList<DirectConversationSummaryResponse>> ListDirectConversationSummariesAsync(
+        bool includeArchived = true,
         CancellationToken cancellationToken = default)
     {
         RequireAuthenticated();
 
         return await _httpClient.GetFromJsonAsync<DirectConversationSummaryResponse[]>(
-            "/api/v1/direct/summaries",
+            $"/api/v1/direct/summaries?includeArchived={includeArchived.ToString().ToLowerInvariant()}",
             cancellationToken)
             ?? Array.Empty<DirectConversationSummaryResponse>();
     }
