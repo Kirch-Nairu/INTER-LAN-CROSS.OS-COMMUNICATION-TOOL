@@ -46,11 +46,16 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
         _connection.On<MessageDeletedResponse>(
             "MessageDeleted",
             message => MessageDeleted?.Invoke(message));
+
+        _connection.On<MessageReceiptsChangedResponse>(
+            "ReceiptUpdated",
+            receipt => ReceiptUpdated?.Invoke(receipt));
     }
 
     public event Action<MessageResponse>? MessageCreated;
     public event Action<MessageResponse>? MessageEdited;
     public event Action<MessageDeletedResponse>? MessageDeleted;
+    public event Action<MessageReceiptsChangedResponse>? ReceiptUpdated;
 
     public HubConnectionState State => _connection.State;
 
