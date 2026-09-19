@@ -569,6 +569,34 @@ public sealed class ChatStore(SqliteDatabase database)
         return receipts;
     }
 
+    private static async Task<MessageResponse?> GetDirectMessageAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        Guid conversationId,
+        Guid messageId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT message_id, scope_type, scope_id, sender_user_id,
+                   client_message_id, body, reply_to_message_id, created_utc,
+                   edited_utc, deleted_utc
+            FROM messages
+            WHERE message_id = $messageId
+              AND scope_type = 'DIRECT'
+              AND scope_id = $conversationId;
+            """;
+        command.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+        command.Parameters.AddWithValue("$conversationId", conversationId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadMessage(reader)
+            : null;
+    }
+
     private static async Task<(Guid ConversationId, Guid SenderUserId)> GetDirectReceiptTargetAsync(
         SqliteConnection connection,
         Guid messageId,
