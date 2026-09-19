@@ -26,7 +26,9 @@ public sealed record MessageResponse(
     Guid ClientMessageId,
     string Body,
     Guid? ReplyToMessageId,
-    DateTimeOffset CreatedUtc);
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset? EditedUtc = null,
+    DateTimeOffset? DeletedUtc = null);
 
 public sealed record PersistedMessageResult(
     MessageResponse Message,
@@ -54,3 +56,10 @@ public sealed record MessagePageResponse(
 public sealed record RealtimeTicketResponse(
     string Ticket,
     DateTimeOffset ExpiresUtc);
+
+public sealed record EditMessageRequest(string Body);
+
+public sealed record MessageDeletedResponse(
+    Guid MessageId,
+    Guid ConversationId,
+    DateTimeOffset DeletedUtc);
