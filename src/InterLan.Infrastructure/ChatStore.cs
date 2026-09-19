@@ -479,6 +479,45 @@ public sealed class ChatStore(SqliteDatabase database)
             now);
     }
 
+    public async Task<DirectUnreadSummaryResponse> GetDirectUnreadSummaryAsync(
+        Guid actorUserId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireActiveUserAsync(connection, actorUserId, cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT
+                COUNT(1) AS unread_messages,
+                COUNT(DISTINCT m.scope_id) AS unread_conversations
+            FROM messages m
+            JOIN direct_conversation_members mine
+              ON mine.conversation_id = m.scope_id
+             AND mine.user_id = $actor
+            WHERE m.scope_type = 'DIRECT'
+              AND m.deleted_utc IS NULL
+              AND m.sender_user_id <> $actor
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM message_receipts r
+                  WHERE r.message_id = m.message_id
+                    AND r.user_id = $actor
+                    AND r.read_utc IS NOT NULL
+              );
+            """;
+        command.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return new DirectUnreadSummaryResponse(0, 0);
+
+        return new DirectUnreadSummaryResponse(
+            reader.GetInt32(0),
+            reader.GetInt32(1));
+    }
+
     public async Task<PersistedMessageResult> SendDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
