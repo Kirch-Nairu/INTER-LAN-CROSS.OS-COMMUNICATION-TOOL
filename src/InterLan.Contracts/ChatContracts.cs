@@ -182,6 +182,12 @@ public sealed record GroupMembershipMutationResponse(
     string Status,
     DateTimeOffset ChangedUtc);
 
+public sealed record GroupTypingIndicatorResponse(
+    Guid GroupId,
+    Guid UserId,
+    bool IsTyping,
+    DateTimeOffset ObservedUtc);
+
 public sealed record GroupMessageReceiptsChangedResponse(
     Guid GroupId,
     Guid MessageId,
