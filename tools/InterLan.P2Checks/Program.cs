@@ -353,6 +353,31 @@ try
         afterDuplicateRace.Count == 22,
         "concurrent duplicate race adds exactly one message");
 
+    var carolUnreadBeforeAdvance =
+        (await chat.ListDirectConversationSummariesAsync(carol))
+        .Single(summary => summary.ConversationId == ac.ConversationId);
+
+    Check(
+        carolUnreadBeforeAdvance.UnreadCount == 21,
+        "conversation unread projection excludes deleted tombstones");
+
+    var partialRead = await chat.MarkConversationReadAsync(
+        carol,
+        ac.ConversationId,
+        firstPage.NextAfterMessageId);
+
+    Check(
+        partialRead.MarkedCount == 4,
+        "conversation read cursor advances only active recipient messages");
+
+    var carolUnreadAfterPartial =
+        (await chat.ListDirectConversationSummariesAsync(carol))
+        .Single(summary => summary.ConversationId == ac.ConversationId);
+
+    Check(
+        carolUnreadAfterPartial.UnreadCount == 17,
+        "partial conversation read advance preserves later unread messages");
+
     var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
     await reopened.InitializeAsync();
     var reopenedChat = new ChatStore(reopened);
