@@ -14,6 +14,13 @@ public sealed class PairedClientConnection(
     public SessionResponse Session { get; } = session;
     public HttpClient HttpClient { get; } = httpClient;
 
+    public InterLanApiClient CreateApiClient()
+    {
+        var client = new InterLanApiClient(HttpClient);
+        client.SetBearerToken(Session.BearerToken);
+        return client;
+    }
+
     public void Dispose() => HttpClient.Dispose();
 }
 
