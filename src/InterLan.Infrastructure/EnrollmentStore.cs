@@ -759,6 +759,43 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         return principal;
     }
 
+    public async Task<SessionPrincipal?> ValidateSessionByIdAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (sessionId == Guid.Empty)
+            return null;
+
+        var now = DateTimeOffset.UtcNow;
+        await using var connection = database.OpenConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT s.session_id, s.user_id, s.device_id, s.expires_utc, u.role
+            FROM device_sessions s
+            JOIN users u ON u.user_id = s.user_id
+            LEFT JOIN devices d ON d.device_id = s.device_id
+            WHERE s.session_id = $sessionId
+              AND s.revoked_utc IS NULL
+              AND s.expires_utc > $now
+              AND u.disabled_utc IS NULL
+              AND (s.device_id IS NULL OR d.revoked_utc IS NULL);
+            """;
+        command.Parameters.AddWithValue("$sessionId", sessionId.ToString("D"));
+        command.Parameters.AddWithValue("$now", now.ToString("O"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return new SessionPrincipal(
+            Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)),
+            reader.IsDBNull(2) ? null : Guid.Parse(reader.GetString(2)),
+            reader.GetString(4),
+            DateTimeOffset.Parse(reader.GetString(3)));
+    }
+
     public async Task<IReadOnlyList<PendingJoinRequestResponse>> ListPendingJoinsAsync(
         Guid ownerUserId,
         CancellationToken cancellationToken = default)
