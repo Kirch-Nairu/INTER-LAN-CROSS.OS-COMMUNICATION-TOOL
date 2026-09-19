@@ -76,3 +76,8 @@ public sealed record MessageReceiptsChangedResponse(
     Guid ConversationId,
     Guid MessageId,
     IReadOnlyList<MessageReceiptResponse> Receipts);
+
+public sealed record RecentMessagePageResponse(
+    IReadOnlyList<MessageResponse> Items,
+    Guid? OlderBeforeMessageId,
+    bool HasOlder);
