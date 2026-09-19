@@ -286,6 +286,140 @@ public sealed class GroupStore(SqliteDatabase database)
             cancellationToken);
     }
 
+    public async Task<GroupMembershipMutationResponse> AddMemberAsync(
+        Guid actorUserId,
+        Guid groupId,
+        AddGroupMemberRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request.UserId == Guid.Empty)
+            throw new ArgumentException("Group member user ID is required.", nameof(request));
+
+        var requestedRole = NormalizeAssignableGroupRole(request.Role);
+
+        await using var connection = database.OpenConnection();
+        await RequireActiveUserAsync(
+            connection,
+            request.UserId,
+            cancellationToken);
+
+        using var transaction = connection.BeginTransaction();
+
+        var actorRole = await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        if (actorRole == "MEMBER")
+            throw new UnauthorizedAccessException(
+                "Group owner or admin authority is required to add members.");
+
+        if (requestedRole == "ADMIN" && actorRole != "OWNER")
+            throw new UnauthorizedAccessException(
+                "Only the group owner can add an admin.");
+
+        var existing = await GetGroupMemberStateAsync(
+            connection,
+            groupId,
+            request.UserId,
+            cancellationToken,
+            transaction);
+
+        if (existing is { RemovedUtc: null })
+        {
+            if (existing.Value.Role == requestedRole)
+            {
+                transaction.Commit();
+                return new GroupMembershipMutationResponse(
+                    groupId,
+                    request.UserId,
+                    requestedRole,
+                    "UNCHANGED",
+                    DateTimeOffset.UtcNow);
+            }
+
+            throw new InvalidOperationException(
+                "User is already an active group member. Use the role mutation endpoint.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        if (existing is null)
+        {
+            await using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText =
+                """
+                INSERT INTO group_members (
+                    group_id, user_id, group_role, joined_utc, removed_utc
+                ) VALUES (
+                    $groupId, $userId, $role, $joinedUtc, NULL
+                );
+                """;
+            insert.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+            insert.Parameters.AddWithValue("$userId", request.UserId.ToString("D"));
+            insert.Parameters.AddWithValue("$role", requestedRole);
+            insert.Parameters.AddWithValue("$joinedUtc", now.ToString("O"));
+            await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+        else
+        {
+            await using var restore = connection.CreateCommand();
+            restore.Transaction = transaction;
+            restore.CommandText =
+                """
+                UPDATE group_members
+                SET group_role = $role,
+                    joined_utc = $joinedUtc,
+                    removed_utc = NULL
+                WHERE group_id = $groupId
+                  AND user_id = $userId
+                  AND removed_utc IS NOT NULL;
+                """;
+            restore.Parameters.AddWithValue("$role", requestedRole);
+            restore.Parameters.AddWithValue("$joinedUtc", now.ToString("O"));
+            restore.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+            restore.Parameters.AddWithValue("$userId", request.UserId.ToString("D"));
+
+            if (await restore.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("Removed group membership could not be restored.");
+        }
+
+        var payload = $"{{\"role\":\"{requestedRole}\"}}";
+
+        await AppendGroupEventAsync(
+            connection,
+            transaction,
+            groupId,
+            actorUserId,
+            request.UserId,
+            "MEMBER_ADDED",
+            payload,
+            now,
+            cancellationToken);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "GROUP_MEMBER_ADDED",
+            groupId,
+            payload,
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+
+        return new GroupMembershipMutationResponse(
+            groupId,
+            request.UserId,
+            requestedRole,
+            "ADDED",
+            now);
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
