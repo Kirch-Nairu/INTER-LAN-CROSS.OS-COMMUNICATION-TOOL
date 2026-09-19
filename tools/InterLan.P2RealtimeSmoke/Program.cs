@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Text.Json;
+using InterLan.Application;
 using Microsoft.AspNetCore.SignalR.Client;
 
 static int ReservePort()
@@ -198,30 +199,41 @@ try
         return 1;
     }
 
-    using var restartedClient = CreateHttpClient();
-    restartedClient.BaseAddress = baseUri;
-    var renewResponse = await restartedClient.PostAsJsonAsync("/api/v1/auth/device/renew", new
+    var serverInfo = await ownerHttp.GetFromJsonAsync<JsonElement>("/api/v1/server/info");
+    var serverEnvelope = serverInfo.GetProperty("server");
+    var pairingStatePath = Path.Combine(root, "client-state", "pairing.state");
+    var pairingState = new ClientPairingState(
+        serverEnvelope.GetProperty("serverId").GetGuid(),
+        baseUri.ToString(),
+        serverInfo.GetProperty("certificateSha256").GetString()!,
+        memberDeviceId,
+        deviceCredential,
+        "Realtime Smoke Device",
+        DateTimeOffset.UtcNow);
+
+    var pairingStore = new ClientPairingStateStore();
+    await pairingStore.SaveAsync(pairingStatePath, pairingState);
+
+    var persistedBytes = await File.ReadAllBytesAsync(pairingStatePath);
+    if (System.Text.Encoding.UTF8.GetString(persistedBytes).Contains(deviceCredential, StringComparison.Ordinal))
     {
-        deviceId = memberDeviceId,
-        deviceCredential
-    });
-    if (!renewResponse.IsSuccessStatusCode)
-    {
-        Console.Error.WriteLine($"FAIL paired-device session renewal {(int)renewResponse.StatusCode}: {await renewResponse.Content.ReadAsStringAsync()}");
+        Console.Error.WriteLine("FAIL persisted client pairing state exposed device credential plaintext");
         return 1;
     }
 
-    var renewedSession = await renewResponse.Content.ReadFromJsonAsync<JsonElement>();
-    var renewedToken = renewedSession.GetProperty("bearerToken").GetString()!;
-    if (renewedSession.GetProperty("deviceId").GetGuid() != memberDeviceId ||
-        renewedSession.GetProperty("userId").GetGuid() != memberUserId ||
+    using var pairedConnection = await new PairedClientSessionManager()
+        .LoadAndRenewAsync(pairingStatePath);
+
+    var renewedToken = pairedConnection.Session.BearerToken;
+    if (pairedConnection.Session.DeviceId != memberDeviceId ||
+        pairedConnection.Session.UserId != memberUserId ||
         string.IsNullOrWhiteSpace(renewedToken))
     {
-        Console.Error.WriteLine("FAIL paired-device renewal returned wrong identity");
+        Console.Error.WriteLine("FAIL persisted pairing restored wrong device identity");
         return 1;
     }
 
-    Console.WriteLine("PASS paired device credential renews a fresh session without re-enrollment");
+    Console.WriteLine("PASS encrypted client pairing state restores and renews session without re-enrollment");
 
     memberToken = renewedToken;
     Bearer(memberHttp, memberToken);
