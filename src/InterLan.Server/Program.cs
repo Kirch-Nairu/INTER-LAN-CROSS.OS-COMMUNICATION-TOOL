@@ -8,6 +8,7 @@ using InterLan.Server.Networking;
 using InterLan.Server.Realtime;
 using Microsoft.Data.Sqlite;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
