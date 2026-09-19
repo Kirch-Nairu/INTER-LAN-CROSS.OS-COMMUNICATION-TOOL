@@ -1,21 +1,10 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Net.Security;
-using System.Net.Sockets;
 using System.Text.Json;
 using InterLan.Application;
 using InterLan.Testing;
 using Microsoft.AspNetCore.SignalR.Client;
-
-static int ReservePort()
-{
-    using var listener = new TcpListener(IPAddress.Loopback, 0);
-    listener.Start();
-    return ((IPEndPoint)listener.LocalEndpoint).Port;
-}
 
 static HttpClient CreateHttpClient() =>
     TestHttpClientFactory.CreateLoopback();
@@ -44,77 +33,12 @@ static HubConnection CreateHub(Uri baseUri, string token)
 static void Bearer(HttpClient client, string token) =>
     client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-var root = Path.Combine(Path.GetTempPath(), "interlan-p2-realtime-" + Guid.NewGuid().ToString("N"));
-Directory.CreateDirectory(root);
-
-var port = ReservePort();
 var repositoryRoot = RepositoryLayout.FindRoot();
-var serverDll = RepositoryLayout.ServerDll(repositoryRoot);
+await using var server = await InterLanServerProcess.StartAsync(repositoryRoot);
+var root = server.DataDirectory;
+var baseUri = server.BaseUri;
 
-if (!File.Exists(serverDll))
 {
-    Console.Error.WriteLine($"Server DLL not found: {serverDll}");
-    return 1;
-}
-
-var startInfo = new ProcessStartInfo
-{
-    FileName = "dotnet",
-    WorkingDirectory = repositoryRoot,
-    UseShellExecute = false,
-    RedirectStandardOutput = true,
-    RedirectStandardError = true
-};
-startInfo.ArgumentList.Add(serverDll);
-startInfo.Environment["INTERLAN_DATA_DIR"] = root;
-startInfo.Environment["InterLan__Server__Port"] = port.ToString();
-startInfo.Environment["InterLan__Server__BindAddress"] = "127.0.0.1";
-startInfo.Environment["InterLan__Server__DiscoveryEnabled"] = "false";
-startInfo.Environment["ASPNETCORE_CONTENTROOT"] = Path.Combine(repositoryRoot, "src", "InterLan.Server");
-
-var output = new ConcurrentQueue<string>();
-var errors = new ConcurrentQueue<string>();
-
-using var process = new Process { StartInfo = startInfo };
-process.OutputDataReceived += (_, e) => { if (e.Data is not null) output.Enqueue(e.Data); };
-process.ErrorDataReceived += (_, e) => { if (e.Data is not null) errors.Enqueue(e.Data); };
-
-process.Start();
-process.BeginOutputReadLine();
-process.BeginErrorReadLine();
-
-var baseUri = new Uri($"https://127.0.0.1:{port}");
-
-try
-{
-    using var probe = CreateHttpClient();
-    var ready = false;
-    for (var attempt = 0; attempt < 40; attempt++)
-    {
-        if (process.HasExited) break;
-        try
-        {
-            using var health = await probe.GetAsync(new Uri(baseUri, "/health"));
-            if (health.IsSuccessStatusCode)
-            {
-                ready = true;
-                break;
-            }
-        }
-        catch
-        {
-            await Task.Delay(250);
-        }
-    }
-
-    if (!ready)
-    {
-        Console.Error.WriteLine("FAIL realtime smoke server did not become healthy");
-        foreach (var line in output.TakeLast(30)) Console.Error.WriteLine($"SERVER OUT: {line}");
-        foreach (var line in errors.TakeLast(30)) Console.Error.WriteLine($"SERVER ERR: {line}");
-        return 1;
-    }
-
     using var ownerHttp = CreateHttpClient();
     ownerHttp.BaseAddress = baseUri;
 
@@ -444,14 +368,4 @@ try
     Console.WriteLine("PASS device revocation removes HTTP authority immediately");
     Console.WriteLine("INTER-LAN P2 REALTIME SMOKE: PASS");
     return 0;
-}
-finally
-{
-    if (!process.HasExited)
-    {
-        process.Kill(entireProcessTree: true);
-        await process.WaitForExitAsync();
-    }
-
-    try { Directory.Delete(root, true); } catch { }
 }
