@@ -261,6 +261,14 @@ try
         aliceAfterBobPreference.MutedUntilUtc is null,
         "direct conversation preferences remain isolated per user");
 
+    var bobUnreadAggregate =
+        await chat.GetDirectUnreadSummaryAsync(bob);
+
+    Check(
+        bobUnreadAggregate.TotalUnreadMessages == 1 &&
+        bobUnreadAggregate.ConversationsWithUnread == 1,
+        "direct unread aggregate tracks unread messages and conversations");
+
     var bobBeforeReadSummaries =
         await chat.ListDirectConversationSummariesAsync(bob);
     var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
