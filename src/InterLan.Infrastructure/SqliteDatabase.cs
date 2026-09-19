@@ -31,7 +31,12 @@ public sealed class SqliteDatabase
         connection.Open();
 
         using var pragma = connection.CreateCommand();
-        pragma.CommandText = "PRAGMA foreign_keys = ON;";
+        pragma.CommandText =
+            """
+            PRAGMA foreign_keys = ON;
+            PRAGMA busy_timeout = 5000;
+            PRAGMA synchronous = NORMAL;
+            """;
         pragma.ExecuteNonQuery();
 
         return connection;
@@ -40,6 +45,17 @@ public sealed class SqliteDatabase
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = OpenConnection();
+
+        await using (var journalMode = connection.CreateCommand())
+        {
+            journalMode.CommandText = "PRAGMA journal_mode = WAL;";
+            var mode = Convert.ToString(await journalMode.ExecuteScalarAsync(cancellationToken));
+            if (!string.Equals(mode, "wal", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"SQLite WAL mode could not be enabled. Reported mode: {mode ?? "<null>"}.");
+            }
+        }
+
         await using var createHistory = connection.CreateCommand();
         createHistory.CommandText =
             """
