@@ -255,6 +255,11 @@ try
         await chat.ListDirectConversationSummariesAsync(bob);
     var bobBeforeRead = bobBeforeReadSummaries.Single(summary =>
         summary.ConversationId == ab1.ConversationId);
+
+    Check(
+        bobBeforeRead.IsPinned &&
+        bobBeforeRead.MutedUntilUtc is not null,
+        "conversation summary projects user preference state");
     Check(
         bobBeforeRead.UnreadCount == 1 &&
         bobBeforeRead.LastMessage?.MessageId == second.Message.MessageId,
