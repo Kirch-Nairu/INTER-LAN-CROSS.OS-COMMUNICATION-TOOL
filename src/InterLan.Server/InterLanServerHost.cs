@@ -83,6 +83,7 @@ public static class InterLanServerHost
         builder.Services.AddSingleton<IServerIdentityStore, SqliteServerIdentityStore>();
         builder.Services.AddSingleton<EnrollmentStore>();
         builder.Services.AddSingleton<ChatStore>();
+        builder.Services.AddSingleton<GroupStore>();
         builder.Services.AddSingleton<RealtimeConnectionRegistry>();
         builder.Services.AddSingleton<RealtimeTicketStore>();
         builder.Services.AddHostedService<LanDiscoveryBroadcaster>();
