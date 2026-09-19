@@ -1040,6 +1040,170 @@ public sealed class GroupStore(SqliteDatabase database)
         return receipts;
     }
 
+    public async Task<MessageResponse> GetGroupMessageByIdAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken);
+
+        return await GetGroupMessageAsync(
+            connection,
+            transaction: null,
+            groupId,
+            messageId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Group message not found.");
+    }
+
+    public async Task<MessageResponse> EditGroupMessageAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid messageId,
+        EditMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var body = MessageTextPolicy.Normalize(
+            request.Body,
+            MaxMessageLength);
+
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        var existing = await GetGroupMessageAsync(
+            connection,
+            transaction,
+            groupId,
+            messageId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Group message not found.");
+
+        if (existing.DeletedUtc is not null)
+            throw new InvalidOperationException("Deleted group messages cannot be edited.");
+
+        if (existing.SenderUserId != actorUserId)
+            throw new UnauthorizedAccessException(
+                "Only the sender can edit this group message.");
+
+        var editedUtc = DateTimeOffset.UtcNow;
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText =
+                """
+                UPDATE messages
+                SET body = $body,
+                    edited_utc = $editedUtc
+                WHERE message_id = $messageId
+                  AND scope_type = 'GROUP'
+                  AND scope_id = $groupId
+                  AND deleted_utc IS NULL;
+                """;
+            update.Parameters.AddWithValue("$body", body);
+            update.Parameters.AddWithValue("$editedUtc", editedUtc.ToString("O"));
+            update.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+            update.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException(
+                    "Group message edit could not be persisted.");
+        }
+
+        var edited = await GetGroupMessageAsync(
+            connection,
+            transaction,
+            groupId,
+            messageId,
+            cancellationToken)
+            ?? throw new InvalidOperationException(
+                "Edited group message could not be reloaded.");
+
+        transaction.Commit();
+        return edited;
+    }
+
+    public async Task<GroupMessageDeletedResponse> DeleteGroupMessageAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        var existing = await GetGroupMessageAsync(
+            connection,
+            transaction,
+            groupId,
+            messageId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Group message not found.");
+
+        if (existing.SenderUserId != actorUserId)
+            throw new UnauthorizedAccessException(
+                "Only the sender can delete this group message.");
+
+        if (existing.DeletedUtc is { } alreadyDeleted)
+        {
+            transaction.Commit();
+            return new GroupMessageDeletedResponse(
+                messageId,
+                groupId,
+                alreadyDeleted);
+        }
+
+        var deletedUtc = DateTimeOffset.UtcNow;
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText =
+                """
+                UPDATE messages
+                SET body = NULL,
+                    deleted_utc = $deletedUtc
+                WHERE message_id = $messageId
+                  AND scope_type = 'GROUP'
+                  AND scope_id = $groupId
+                  AND deleted_utc IS NULL;
+                """;
+            update.Parameters.AddWithValue("$deletedUtc", deletedUtc.ToString("O"));
+            update.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+            update.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException(
+                    "Group message delete could not be persisted.");
+        }
+
+        transaction.Commit();
+        return new GroupMessageDeletedResponse(
+            messageId,
+            groupId,
+            deletedUtc);
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
@@ -1171,6 +1335,34 @@ public sealed class GroupStore(SqliteDatabase database)
             reader.IsDBNull(1)
                 ? null
                 : DateTimeOffset.Parse(reader.GetString(1)));
+    }
+
+    private static async Task<MessageResponse?> GetGroupMessageAsync(
+        SqliteConnection connection,
+        SqliteTransaction? transaction,
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            SELECT message_id, scope_type, scope_id, sender_user_id,
+                   client_message_id, body, reply_to_message_id, created_utc,
+                   edited_utc, deleted_utc
+            FROM messages
+            WHERE message_id = $messageId
+              AND scope_type = 'GROUP'
+              AND scope_id = $groupId;
+            """;
+        command.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+        command.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken)
+            ? ReadMessage(reader)
+            : null;
     }
 
     private static async Task<Guid> RequireGroupMessageAsync(
