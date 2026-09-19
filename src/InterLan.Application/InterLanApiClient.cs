@@ -457,6 +457,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Global direct-message search response was empty.");
     }
 
+    public async Task<CurrentDeviceSecurityResponse> GetCurrentDeviceSecurityAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<CurrentDeviceSecurityResponse>(
+            "/api/v1/auth/device/current",
+            cancellationToken)
+            ?? throw new InvalidDataException("Current-device security response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
