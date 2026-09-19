@@ -163,3 +163,7 @@ public sealed record GroupDetailsResponse(
     DateTimeOffset CreatedUtc,
     string MyRole,
     IReadOnlyList<GroupMemberResponse> Members);
+
+public sealed record UpdateGroupRequest(
+    string Name,
+    string? Topic);
