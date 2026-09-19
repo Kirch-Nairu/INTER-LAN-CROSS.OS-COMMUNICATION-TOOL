@@ -174,6 +174,24 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Edited message response was empty.");
     }
 
+    public async Task<MessageDeletedResponse> DeleteDirectMessageAsync(
+        Guid conversationId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.DeleteAsync(
+            $"/api/v1/direct/{conversationId:D}/messages/{messageId:D}",
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageDeletedResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Deleted message response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
