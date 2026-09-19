@@ -337,6 +337,21 @@ try
             TimeSpan.FromHours(1)));
     Check(renewalAfterRevokeRejected, "revoked device credential cannot mint a new session");
 
+    var extraOwnerSession = await store.LoginOwnerAsync(
+        "owner1",
+        "owner-password-123",
+        TimeSpan.FromHours(1));
+
+    var revokedOthers = await store.RevokeOtherSessionsAsync(
+        ownerSession.UserId,
+        ownerSession.SessionId);
+
+    Check(
+        revokedOthers.Contains(extraOwnerSession.SessionId) &&
+        await store.ValidateSessionAsync(extraOwnerSession.BearerToken) is null &&
+        await store.ValidateSessionAsync(ownerSession.BearerToken) is not null,
+        "revoke-other-sessions preserves current authority only");
+
     var ownerPrincipal = await store.ValidateSessionAsync(ownerSession.BearerToken);
     Check(ownerPrincipal is not null && ownerPrincipal.Role == "OWNER", "owner session remains valid after member revocation");
 
