@@ -91,6 +91,19 @@ try
         duplicateWrites.Count(write => write.Created) == 1 &&
         duplicateWrites.Select(write => write.Message.MessageId).Distinct().Count() == 1,
         "sixty-four concurrent duplicate writes collapse to one message");
+
+    var aliceMessages = uniqueHistory
+        .Where(message => message.SenderUserId == alice)
+        .Select(message => message.MessageId)
+        .ToArray();
+
+    await Task.WhenAll(
+        aliceMessages.Select(messageId =>
+            chat.MarkReadAsync(bob, messageId)));
+
+    Check(
+        aliceMessages.Length == 100,
+        "one hundred concurrent receipt writes complete without database lock loss");
 }
 finally
 {
