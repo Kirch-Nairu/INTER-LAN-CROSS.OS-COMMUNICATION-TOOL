@@ -6,6 +6,7 @@ using InterLan.Infrastructure;
 using InterLan.Server;
 using InterLan.Server.Networking;
 using InterLan.Server.Realtime;
+using Microsoft.Data.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 
