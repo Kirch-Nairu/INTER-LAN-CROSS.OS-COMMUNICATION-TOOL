@@ -506,11 +506,15 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             credential.CommandText =
                 """
                 UPDATE devices
-                SET credential_hash = $credentialHash
+                SET credential_hash = $credentialHash,
+                    credential_created_utc = $credentialCreatedUtc,
+                    credential_rotated_utc = NULL,
+                    credential_last_used_utc = NULL
                 WHERE device_id = $deviceId
                   AND revoked_utc IS NULL;
                 """;
             credential.Parameters.AddWithValue("$credentialHash", SecretCodec.HashToken(deviceCredential));
+            credential.Parameters.AddWithValue("$credentialCreatedUtc", DateTimeOffset.UtcNow.ToString("O"));
             credential.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
             if (await credential.ExecuteNonQueryAsync(cancellationToken) != 1)
                 throw new UnauthorizedAccessException("Approved device is no longer active.");
