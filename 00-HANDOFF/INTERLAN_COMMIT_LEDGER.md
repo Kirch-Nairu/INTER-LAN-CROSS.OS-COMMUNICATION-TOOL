@@ -15,7 +15,7 @@ No fake commits. No whitespace farming. No empty commits.
 
 | Phase | Target | Current | Status |
 | --- | ---: | ---: | --- |
-| P2 | 300+ | 76 commits ahead of accepted main after this ledger update | active — C075 checkpoint issued |
+| P2 | 300+ | 78 commits ahead of accepted main after this ledger update | active — C075 PASS, advancing to C100 |
 | P3 | 300+ | 0 | blocked on accepted P2 merge |
 | P4 | 300+ | 0 | not started |
 | P5 | 300+ | 0 | not started |
@@ -36,7 +36,7 @@ The two repository-state/ledger commits immediately after that checkpoint are pa
 
 - C025: passed by implementation history before formal campaign ledger.
 - C050: crossed during structural hardening wave; superseded by immediate C075 local replay.
-- C075: **LOCAL REPLAY REQUIRED NOW**.
+- C075: **PASS — operator-local Windows replay at `3a1805fb7c985b83ca72bd2c6f4353abcc435f1e`.**
 - C100: architecture/invariant review after checkpoint repairs and next bounded wave.
 - C125: focused phase checkpoint.
 - C150: restart/persistence/migration replay.
@@ -47,17 +47,16 @@ The two repository-state/ledger commits immediately after that checkpoint are pa
 - C275: focused phase checkpoint.
 - C300: full phase acceptance.
 
-## C075 required local replay
+## C075 local replay result
 
-```text
-dotnet build InterLan.sln -c Release
-InterLan.P1Checks
-InterLan.P1NetworkSmoke
-InterLan.P2Checks
-InterLan.P2RealtimeSmoke
-```
+PASS:
+- full solution build;
+- P1 identity/pairing;
+- P1 real HTTPS network smoke;
+- P2 core DM/persistence;
+- P2 realtime/pairing/rotation/revocation.
 
-Do not treat C075 as passed until the operator-local result is clean.
+C075 is closed.
 
 ## Current completed slices
 
