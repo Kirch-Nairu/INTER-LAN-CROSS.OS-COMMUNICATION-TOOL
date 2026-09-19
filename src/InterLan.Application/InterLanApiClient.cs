@@ -203,6 +203,24 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Server settings response was empty.");
     }
 
+    public async Task<ServerSettingsSnapshotResponse> UpdateServerSettingsAsync(
+        UpdateServerSettingsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PutAsJsonAsync(
+            "/api/v1/server/settings",
+            request,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<ServerSettingsSnapshotResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Server settings response was empty.");
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
