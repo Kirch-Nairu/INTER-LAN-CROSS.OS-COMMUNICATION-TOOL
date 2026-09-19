@@ -1,10 +1,9 @@
-using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Themes.Fluent;
 
 namespace InterLan.Desktop;
 
-public sealed class App : Application
+public sealed class App : Avalonia.Application
 {
     public override void Initialize()
     {
