@@ -420,6 +420,105 @@ public sealed class GroupStore(SqliteDatabase database)
             now);
     }
 
+    public async Task<GroupMembershipMutationResponse> RemoveMemberAsync(
+        Guid actorUserId,
+        Guid groupId,
+        Guid targetUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (targetUserId == Guid.Empty)
+            throw new ArgumentException("Group member user ID is required.", nameof(targetUserId));
+
+        await using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        var actorRole = await RequireActiveGroupMemberAsync(
+            connection,
+            actorUserId,
+            groupId,
+            cancellationToken,
+            transaction);
+
+        var target = await GetGroupMemberStateAsync(
+            connection,
+            groupId,
+            targetUserId,
+            cancellationToken,
+            transaction);
+
+        if (target is null || target.Value.RemovedUtc is not null)
+            throw new KeyNotFoundException("Active group member was not found.");
+
+        if (target.Value.Role == "OWNER")
+            throw new UnauthorizedAccessException(
+                "The group owner cannot be removed.");
+
+        var removingSelf = actorUserId == targetUserId;
+        if (!removingSelf)
+        {
+            if (actorRole == "MEMBER")
+                throw new UnauthorizedAccessException(
+                    "Group owner or admin authority is required to remove another member.");
+
+            if (actorRole == "ADMIN" && target.Value.Role != "MEMBER")
+                throw new UnauthorizedAccessException(
+                    "Group admins may remove members but cannot remove other admins.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var remove = connection.CreateCommand())
+        {
+            remove.Transaction = transaction;
+            remove.CommandText =
+                """
+                UPDATE group_members
+                SET removed_utc = $removedUtc
+                WHERE group_id = $groupId
+                  AND user_id = $userId
+                  AND removed_utc IS NULL;
+                """;
+            remove.Parameters.AddWithValue("$removedUtc", now.ToString("O"));
+            remove.Parameters.AddWithValue("$groupId", groupId.ToString("D"));
+            remove.Parameters.AddWithValue("$userId", targetUserId.ToString("D"));
+
+            if (await remove.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("Group membership removal lost its authority race.");
+        }
+
+        var payload = $"{{\"previousRole\":\"{target.Value.Role}\"}}";
+
+        await AppendGroupEventAsync(
+            connection,
+            transaction,
+            groupId,
+            actorUserId,
+            targetUserId,
+            "MEMBER_REMOVED",
+            payload,
+            now,
+            cancellationToken);
+
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            actorUserId,
+            "GROUP_MEMBER_REMOVED",
+            groupId,
+            payload,
+            now,
+            cancellationToken);
+
+        transaction.Commit();
+
+        return new GroupMembershipMutationResponse(
+            groupId,
+            targetUserId,
+            null,
+            "REMOVED",
+            now);
+    }
+
     public async Task<IReadOnlyList<GroupEventResponse>> ListGroupEventsAsync(
         Guid actorUserId,
         Guid groupId,
