@@ -195,6 +195,29 @@ try
         concurrentHistory.Count == 20,
         "concurrent unique sends remain fully readable");
 
+    var duplicateClientMessageId = Guid.NewGuid();
+    var duplicateRace = await Task.WhenAll(
+        Enumerable.Range(0, 12)
+            .Select(_ => chat.SendDirectMessageAsync(
+                alice,
+                ac.ConversationId,
+                new SendMessageRequest(duplicateClientMessageId, "same-idempotent-payload"))));
+
+    Check(
+        duplicateRace.Count(result => result.Created) == 1 &&
+        duplicateRace.Select(result => result.Message.MessageId).Distinct().Count() == 1,
+        "concurrent duplicate client message IDs collapse to one durable message");
+
+    var afterDuplicateRace = await chat.GetDirectHistoryAsync(
+        carol,
+        ac.ConversationId,
+        null,
+        100);
+
+    Check(
+        afterDuplicateRace.Count == 21,
+        "concurrent duplicate race adds exactly one message");
+
     var reopened = new SqliteDatabase(Path.Combine(root, "p2.db"));
     await reopened.InitializeAsync();
     var reopenedChat = new ChatStore(reopened);
