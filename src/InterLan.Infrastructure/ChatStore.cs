@@ -347,6 +347,35 @@ public sealed class ChatStore(SqliteDatabase database)
         return members;
     }
 
+    public async Task MarkDeliveredAsync(
+        Guid actorUserId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = database.OpenConnection();
+        var target = await GetDirectReceiptTargetAsync(connection, messageId, cancellationToken);
+
+        await RequireDirectMembershipAsync(connection, actorUserId, target.ConversationId, cancellationToken);
+        if (target.SenderUserId == actorUserId)
+            throw new InvalidOperationException("A sender cannot acknowledge their own message as delivered.");
+
+        var now = DateTimeOffset.UtcNow.ToString("O");
+
+        await using var receipt = connection.CreateCommand();
+        receipt.CommandText =
+            """
+            INSERT INTO message_receipts (
+                message_id, user_id, delivered_utc, read_utc
+            ) VALUES ($messageId, $userId, $utc, NULL)
+            ON CONFLICT(message_id, user_id) DO UPDATE SET
+                delivered_utc = COALESCE(message_receipts.delivered_utc, excluded.delivered_utc);
+            """;
+        receipt.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+        receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
+        receipt.Parameters.AddWithValue("$utc", now);
+        await receipt.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task MarkReadAsync(
         Guid actorUserId,
         Guid messageId,
