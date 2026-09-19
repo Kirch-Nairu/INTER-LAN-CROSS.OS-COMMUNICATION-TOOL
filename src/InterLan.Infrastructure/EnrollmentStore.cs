@@ -277,10 +277,23 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         return new SubmitJoinResponse(requestId, "PENDING");
     }
 
+    public Task<JoinDecisionResponse> DecideJoinAsync(
+        Guid ownerUserId,
+        Guid requestId,
+        bool approve,
+        CancellationToken cancellationToken = default) =>
+        DecideJoinAsync(
+            ownerUserId,
+            requestId,
+            approve,
+            existingUserId: null,
+            cancellationToken);
+
     public async Task<JoinDecisionResponse> DecideJoinAsync(
         Guid ownerUserId,
         Guid requestId,
         bool approve,
+        Guid? existingUserId,
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
@@ -343,11 +356,31 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             return new JoinDecisionResponse(requestId, "REJECTED", null, null);
         }
 
-        var userId = Guid.NewGuid();
-        var deviceId = Guid.NewGuid();
-
-        await using (var user = connection.CreateCommand())
+        Guid userId;
+        if (existingUserId is { } requestedExistingUserId)
         {
+            await using var existingUser = connection.CreateCommand();
+            existingUser.Transaction = transaction;
+            existingUser.CommandText =
+                """
+                SELECT user_id
+                FROM users
+                WHERE user_id = $userId
+                  AND disabled_utc IS NULL;
+                """;
+            existingUser.Parameters.AddWithValue("$userId", requestedExistingUserId.ToString("D"));
+
+            var value = await existingUser.ExecuteScalarAsync(cancellationToken);
+            if (value is null)
+                throw new KeyNotFoundException("Existing user is not active or does not exist.");
+
+            userId = Guid.Parse(Convert.ToString(value)!);
+        }
+        else
+        {
+            userId = Guid.NewGuid();
+
+            await using var user = connection.CreateCommand();
             user.Transaction = transaction;
             user.CommandText =
                 """
@@ -360,6 +393,8 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             user.Parameters.AddWithValue("$utc", now.ToString("O"));
             await user.ExecuteNonQueryAsync(cancellationToken);
         }
+
+        var deviceId = Guid.NewGuid();
 
         await using (var device = connection.CreateCommand())
         {
@@ -396,7 +431,17 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             await approveRequest.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        await AppendAuditAsync(connection, transaction, ownerUserId, "JOIN_APPROVED", "DEVICE", deviceId, "{}", now, cancellationToken);
+        await AppendAuditAsync(
+            connection,
+            transaction,
+            ownerUserId,
+            existingUserId is null ? "JOIN_APPROVED" : "DEVICE_ATTACHED_TO_USER",
+            "DEVICE",
+            deviceId,
+            "{}",
+            now,
+            cancellationToken);
+
         transaction.Commit();
         return new JoinDecisionResponse(requestId, "APPROVED", userId, deviceId);
     }
