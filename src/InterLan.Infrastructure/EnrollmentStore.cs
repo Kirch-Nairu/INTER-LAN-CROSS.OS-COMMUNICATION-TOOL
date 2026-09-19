@@ -796,6 +796,37 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             DateTimeOffset.Parse(reader.GetString(3)));
     }
 
+    private static async Task TouchSessionActivityAsync(
+        SqliteConnection connection,
+        SessionPrincipal principal,
+        DateTimeOffset utc,
+        CancellationToken cancellationToken)
+    {
+        await using (var touchSession = connection.CreateCommand())
+        {
+            touchSession.CommandText =
+                "UPDATE device_sessions SET last_seen_utc = $utc WHERE session_id = $id;";
+            touchSession.Parameters.AddWithValue("$utc", utc.ToString("O"));
+            touchSession.Parameters.AddWithValue("$id", principal.SessionId.ToString("D"));
+            await touchSession.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (principal.DeviceId is { } deviceId)
+        {
+            await using var touchDevice = connection.CreateCommand();
+            touchDevice.CommandText =
+                """
+                UPDATE devices
+                SET last_seen_utc = $utc
+                WHERE device_id = $deviceId
+                  AND revoked_utc IS NULL;
+                """;
+            touchDevice.Parameters.AddWithValue("$utc", utc.ToString("O"));
+            touchDevice.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            await touchDevice.ExecuteNonQueryAsync(cancellationToken);
+        }
+    }
+
     public async Task<IReadOnlyList<PendingJoinRequestResponse>> ListPendingJoinsAsync(
         Guid ownerUserId,
         CancellationToken cancellationToken = default)
