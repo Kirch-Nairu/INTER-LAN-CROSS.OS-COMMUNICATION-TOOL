@@ -58,6 +58,24 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
         _connection.On<TypingIndicatorResponse>(
             "TypingChanged",
             typing => TypingChanged?.Invoke(typing));
+
+        _connection.Reconnecting += exception =>
+        {
+            Reconnecting?.Invoke(exception);
+            return Task.CompletedTask;
+        };
+
+        _connection.Reconnected += connectionId =>
+        {
+            Reconnected?.Invoke(connectionId);
+            return Task.CompletedTask;
+        };
+
+        _connection.Closed += exception =>
+        {
+            Closed?.Invoke(exception);
+            return Task.CompletedTask;
+        };
     }
 
     public event Action<MessageResponse>? MessageCreated;
@@ -66,6 +84,9 @@ public sealed class InterLanRealtimeClient : IAsyncDisposable
     public event Action<MessageReceiptsChangedResponse>? ReceiptUpdated;
     public event Action<UserPresenceResponse>? PresenceChanged;
     public event Action<TypingIndicatorResponse>? TypingChanged;
+    public event Action<Exception?>? Reconnecting;
+    public event Action<string?>? Reconnected;
+    public event Action<Exception?>? Closed;
 
     public HubConnectionState State => _connection.State;
 
