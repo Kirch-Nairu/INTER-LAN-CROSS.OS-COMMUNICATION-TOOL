@@ -634,6 +634,55 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? throw new InvalidDataException("Group message page response was empty.");
     }
 
+    public async Task<MessageResponse> GetGroupMessageAsync(
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<MessageResponse>(
+            $"/api/v1/groups/{groupId:D}/messages/{messageId:D}",
+            cancellationToken)
+            ?? throw new InvalidDataException("Group message detail response was empty.");
+    }
+
+    public async Task<MessageResponse> EditGroupMessageAsync(
+        Guid groupId,
+        Guid messageId,
+        EditMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PutAsJsonAsync(
+            $"/api/v1/groups/{groupId:D}/messages/{messageId:D}",
+            request,
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<MessageResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Group message edit response was empty.");
+    }
+
+    public async Task<GroupMessageDeletedResponse> DeleteGroupMessageAsync(
+        Guid groupId,
+        Guid messageId,
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.DeleteAsync(
+            $"/api/v1/groups/{groupId:D}/messages/{messageId:D}",
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content.ReadFromJsonAsync<GroupMessageDeletedResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new InvalidDataException("Group message delete response was empty.");
+    }
+
     public async Task<IReadOnlyList<MessageReceiptResponse>> MarkGroupMessageDeliveredAsync(
         Guid groupId,
         Guid messageId,
