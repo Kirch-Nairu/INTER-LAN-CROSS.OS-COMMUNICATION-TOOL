@@ -355,6 +355,19 @@ try
     var reopenedIdentity = await reopenedIdentityStore.GetAsync();
     Check(reopenedIdentity == owner, "restart preserves canonical server identity");
 
+    var logoutSession = await store.LoginOwnerAsync(
+        "owner1",
+        "owner-password-123",
+        TimeSpan.FromHours(1));
+
+    await store.RevokeOwnSessionAsync(
+        logoutSession.UserId,
+        logoutSession.SessionId);
+
+    Check(
+        await store.ValidateSessionAsync(logoutSession.BearerToken) is null,
+        "authenticated self-logout revokes the active session");
+
     await store.RevokeSessionAsync(owner.OwnerUserId, ownerSession.SessionId);
     var revokedOwner = await store.ValidateSessionAsync(ownerSession.BearerToken);
     Check(revokedOwner is null, "explicit owner-authorized session revocation invalidates token");
