@@ -909,16 +909,16 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
-        var senderUserId = await RequireGroupMessageAsync(
-            connection,
-            groupId,
-            messageId,
-            cancellationToken);
-
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
+            cancellationToken);
+
+        var senderUserId = await RequireGroupMessageAsync(
+            connection,
+            groupId,
+            messageId,
             cancellationToken);
 
         if (senderUserId == actorUserId)
@@ -953,16 +953,16 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
-        var senderUserId = await RequireGroupMessageAsync(
-            connection,
-            groupId,
-            messageId,
-            cancellationToken);
-
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
+            cancellationToken);
+
+        var senderUserId = await RequireGroupMessageAsync(
+            connection,
+            groupId,
+            messageId,
             cancellationToken);
 
         if (senderUserId == actorUserId)
@@ -1000,16 +1000,16 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
-        await RequireGroupMessageAsync(
-            connection,
-            groupId,
-            messageId,
-            cancellationToken);
-
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
+            cancellationToken);
+
+        await RequireGroupMessageAsync(
+            connection,
+            groupId,
+            messageId,
             cancellationToken);
 
         await using var command = connection.CreateCommand();
