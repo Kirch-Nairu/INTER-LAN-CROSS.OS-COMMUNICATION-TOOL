@@ -353,27 +353,12 @@ public sealed class ChatStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        var target = await GetDirectReceiptTargetAsync(connection, messageId, cancellationToken);
 
-        Guid conversationId;
-        await using (var message = connection.CreateCommand())
-        {
-            message.CommandText =
-                """
-                SELECT scope_id
-                FROM messages
-                WHERE message_id = $messageId
-                  AND scope_type = 'DIRECT'
-                  AND deleted_utc IS NULL;
-                """;
-            message.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
-            var value = await message.ExecuteScalarAsync(cancellationToken);
-            if (value is null)
-                throw new KeyNotFoundException("Message not found.");
+        await RequireDirectMembershipAsync(connection, actorUserId, target.ConversationId, cancellationToken);
+        if (target.SenderUserId == actorUserId)
+            throw new InvalidOperationException("A sender cannot acknowledge their own message as read.");
 
-            conversationId = Guid.Parse(Convert.ToString(value)!);
-        }
-
-        await RequireDirectMembershipAsync(connection, actorUserId, conversationId, cancellationToken);
         var now = DateTimeOffset.UtcNow.ToString("O");
 
         await using var receipt = connection.CreateCommand();
@@ -390,6 +375,31 @@ public sealed class ChatStore(SqliteDatabase database)
         receipt.Parameters.AddWithValue("$userId", actorUserId.ToString("D"));
         receipt.Parameters.AddWithValue("$utc", now);
         await receipt.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task<(Guid ConversationId, Guid SenderUserId)> GetDirectReceiptTargetAsync(
+        SqliteConnection connection,
+        Guid messageId,
+        CancellationToken cancellationToken)
+    {
+        await using var message = connection.CreateCommand();
+        message.CommandText =
+            """
+            SELECT scope_id, sender_user_id
+            FROM messages
+            WHERE message_id = $messageId
+              AND scope_type = 'DIRECT'
+              AND deleted_utc IS NULL;
+            """;
+        message.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+
+        await using var reader = await message.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            throw new KeyNotFoundException("Message not found.");
+
+        return (
+            Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)));
     }
 
     private static string PairKey(Guid left, Guid right)
