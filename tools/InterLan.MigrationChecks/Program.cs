@@ -110,6 +110,21 @@ foreach (var historicalMigration in historicalMigrations)
             directColumns.Contains("pair_key"),
             $"{historicalMigration} upgrades canonical DM schema");
 
+        await using (var preferencesTable = connection.CreateCommand())
+        {
+            preferencesTable.CommandText =
+                """
+                SELECT COUNT(1)
+                FROM sqlite_master
+                WHERE type = 'table'
+                  AND name = 'direct_conversation_preferences';
+                """;
+
+            Check(
+                Convert.ToInt32(await preferencesTable.ExecuteScalarAsync()) == 1,
+                $"{historicalMigration} upgrades direct conversation preference schema");
+        }
+
         var requiredIndexes = new[]
         {
             "ix_direct_conversation_members_user",
