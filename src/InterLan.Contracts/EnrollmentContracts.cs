@@ -99,3 +99,12 @@ public sealed record UpdateServerSettingsRequest(
     bool DiscoveryEnabled,
     bool ClientApprovalRequired,
     string StoragePath);
+
+public sealed record SessionSummaryResponse(
+    Guid SessionId,
+    Guid? DeviceId,
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset ExpiresUtc,
+    DateTimeOffset? RevokedUtc,
+    DateTimeOffset? LastSeenUtc,
+    bool Current);
