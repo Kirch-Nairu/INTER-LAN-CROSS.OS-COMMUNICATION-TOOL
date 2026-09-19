@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using System.Net.Security;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -63,19 +62,8 @@ process.Start();
 process.BeginOutputReadLine();
 process.BeginErrorReadLine();
 
-using var handler = new SocketsHttpHandler
-{
-    UseProxy = false,
-    ConnectTimeout = TimeSpan.FromSeconds(2),
-    SslOptions = new SslClientAuthenticationOptions
-    {
-        RemoteCertificateValidationCallback = (_, _, _, _) => true
-    }
-};
-using var client = new HttpClient(handler)
-{
-    Timeout = TimeSpan.FromSeconds(3)
-};
+using var client = TestHttpClientFactory.CreateLoopback(
+    TimeSpan.FromSeconds(3));
 
 var probeBases = new[]
 {
