@@ -354,6 +354,77 @@ public sealed class ChatStore(SqliteDatabase database)
             true);
     }
 
+    public async Task<MessageResponse> EditDirectMessageAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        Guid messageId,
+        EditMessageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Body))
+            throw new ArgumentException("Message body is required.");
+        if (request.Body.Length > MaxMessageLength)
+            throw new ArgumentException(
+                $"Message body cannot exceed {MaxMessageLength} characters.");
+
+        var body = request.Body.Trim();
+
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        using var transaction = connection.BeginTransaction();
+
+        var existing = await GetDirectMessageAsync(
+            connection,
+            transaction,
+            conversationId,
+            messageId,
+            cancellationToken)
+            ?? throw new KeyNotFoundException("Message not found.");
+
+        if (existing.DeletedUtc is not null)
+            throw new InvalidOperationException("Deleted messages cannot be edited.");
+
+        if (existing.SenderUserId != actorUserId)
+            throw new UnauthorizedAccessException("Only the sender can edit this message.");
+
+        var editedUtc = DateTimeOffset.UtcNow;
+
+        await using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText =
+                """
+                UPDATE messages
+                SET body = $body,
+                    edited_utc = $editedUtc
+                WHERE message_id = $messageId
+                  AND deleted_utc IS NULL;
+                """;
+            update.Parameters.AddWithValue("$body", body);
+            update.Parameters.AddWithValue("$editedUtc", editedUtc.ToString("O"));
+            update.Parameters.AddWithValue("$messageId", messageId.ToString("D"));
+
+            if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new InvalidOperationException("Message edit could not be persisted.");
+        }
+
+        var edited = await GetDirectMessageAsync(
+            connection,
+            transaction,
+            conversationId,
+            messageId,
+            cancellationToken)
+            ?? throw new InvalidOperationException("Edited message could not be reloaded.");
+
+        transaction.Commit();
+        return edited;
+    }
+
     public async Task<IReadOnlyList<MessageResponse>> GetDirectHistoryAsync(
         Guid actorUserId,
         Guid conversationId,
