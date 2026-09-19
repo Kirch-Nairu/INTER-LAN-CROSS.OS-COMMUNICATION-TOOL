@@ -268,6 +268,16 @@ try
             summary.ConversationId != ab1.ConversationId),
         "archived direct conversation is omitted from active summary list");
 
+    Check(await ThrowsAsync<UnauthorizedAccessException>(() =>
+        chat.UpdateDirectConversationPreferenceAsync(
+            carol,
+            ab1.ConversationId,
+            new UpdateDirectConversationPreferenceRequest(
+                IsPinned: true,
+                MutedUntilUtc: null,
+                IsArchived: false))),
+        "non-member cannot mutate another direct conversation preference");
+
     var aliceAfterBobPreference =
         await chat.GetDirectConversationPreferenceAsync(
             alice,
