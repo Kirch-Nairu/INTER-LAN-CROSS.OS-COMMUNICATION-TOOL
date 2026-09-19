@@ -419,6 +419,21 @@ var baseUri = server.BaseUri;
 
     await memberHub.StopAsync();
 
+    await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+    var presenceAfterDisconnect = await ownerHttp.GetFromJsonAsync<JsonElement[]>(
+        "/api/v1/presence");
+
+    if (presenceAfterDisconnect is null ||
+        presenceAfterDisconnect.Any(item =>
+            item.GetProperty("userId").GetGuid() == memberUserId))
+    {
+        Console.Error.WriteLine("FAIL disconnected member remained online in presence snapshot");
+        return 1;
+    }
+
+    Console.WriteLine("PASS disconnected member leaves authenticated presence snapshot");
+
     var offlineClientMessageId = Guid.NewGuid();
     using var offlineSend = await ownerHttp.PostAsJsonAsync($"/api/v1/direct/{conversationId:D}/messages", new
     {
