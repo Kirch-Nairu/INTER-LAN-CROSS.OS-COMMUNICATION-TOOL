@@ -20,6 +20,17 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             new AuthenticationHeaderValue("Bearer", bearerToken);
     }
 
+    public async Task<IReadOnlyList<UserSummaryResponse>> ListUsersAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        return await _httpClient.GetFromJsonAsync<UserSummaryResponse[]>(
+            "/api/v1/users",
+            cancellationToken)
+            ?? Array.Empty<UserSummaryResponse>();
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
