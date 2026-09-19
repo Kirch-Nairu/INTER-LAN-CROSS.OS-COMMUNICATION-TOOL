@@ -1020,17 +1020,23 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
-        return await ListActiveGroupMemberIdsAsync(
+        var memberIds = await ListActiveGroupMemberIdsAsync(
             connection,
-            transaction: null,
+            transaction,
             groupId,
             cancellationToken);
+
+        transaction.Commit();
+        return memberIds;
     }
 
     /// <summary>
@@ -1180,23 +1186,30 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         await RequireGroupMessageAsync(
             connection,
             groupId,
             messageId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
-        return await ListGroupMessageReceiptsAsync(
+        var receipts = await ListGroupMessageReceiptsAsync(
             connection,
-            transaction: null,
+            transaction,
             messageId,
             cancellationToken);
+
+        transaction.Commit();
+        return receipts;
     }
 
     public async Task<MessageResponse> GetGroupMessageByIdAsync(
@@ -1206,19 +1219,25 @@ public sealed class GroupStore(SqliteDatabase database)
         CancellationToken cancellationToken = default)
     {
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
-        return await GetGroupMessageAsync(
+        var message = await GetGroupMessageAsync(
             connection,
-            transaction: null,
+            transaction,
             groupId,
             messageId,
             cancellationToken)
             ?? throw new KeyNotFoundException("Group message not found.");
+
+        transaction.Commit();
+        return message;
     }
 
     public async Task<MessageResponse> EditGroupMessageAsync(
@@ -1374,11 +1393,14 @@ public sealed class GroupStore(SqliteDatabase database)
             throw new ArgumentOutOfRangeException(nameof(limit));
 
         await using var connection = database.OpenConnection();
+        using var transaction = BeginReadTransaction(connection);
+
         await RequireActiveGroupMemberAsync(
             connection,
             actorUserId,
             groupId,
-            cancellationToken);
+            cancellationToken,
+            transaction);
 
         string? afterCreatedUtc = null;
         string? afterId = null;
@@ -1386,6 +1408,7 @@ public sealed class GroupStore(SqliteDatabase database)
         if (afterEventId is { } cursor)
         {
             await using var cursorCommand = connection.CreateCommand();
+            cursorCommand.Transaction = transaction;
             cursorCommand.CommandText =
                 """
                 SELECT created_utc, group_event_id
@@ -1407,6 +1430,7 @@ public sealed class GroupStore(SqliteDatabase database)
         }
 
         await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
             SELECT group_event_id, group_id, actor_user_id,
@@ -1450,6 +1474,7 @@ public sealed class GroupStore(SqliteDatabase database)
                 DateTimeOffset.Parse(eventReader.GetString(6))));
         }
 
+        transaction.Commit();
         return events;
     }
 
