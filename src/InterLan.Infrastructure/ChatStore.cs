@@ -542,6 +542,64 @@ public sealed class ChatStore(SqliteDatabase database)
             true);
     }
 
+    public async Task<DirectMessageSearchResponse> SearchDirectMessagesAsync(
+        Guid actorUserId,
+        Guid conversationId,
+        string query,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = (query ?? string.Empty)
+            .Trim()
+            .Normalize(System.Text.NormalizationForm.FormC);
+
+        if (normalizedQuery.Length is < 1 or > 128)
+            throw new ArgumentException(
+                "Search query must contain between 1 and 128 characters.",
+                nameof(query));
+
+        if (limit is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        await using var connection = database.OpenConnection();
+        await RequireDirectMembershipAsync(
+            connection,
+            actorUserId,
+            conversationId,
+            cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT message_id, scope_type, scope_id, sender_user_id,
+                   client_message_id, body, reply_to_message_id, created_utc,
+                   edited_utc, deleted_utc
+            FROM messages
+            WHERE scope_type = 'DIRECT'
+              AND scope_id = $conversationId
+              AND deleted_utc IS NULL
+              AND body IS NOT NULL
+              AND instr(lower(body), lower($query)) > 0
+            ORDER BY created_utc DESC, message_id DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue(
+            "$conversationId",
+            conversationId.ToString("D"));
+        command.Parameters.AddWithValue("$query", normalizedQuery);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var items = new List<MessageResponse>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            items.Add(ReadMessage(reader));
+
+        return new DirectMessageSearchResponse(
+            conversationId,
+            normalizedQuery,
+            items);
+    }
+
     public async Task<MessageResponse> EditDirectMessageAsync(
         Guid actorUserId,
         Guid conversationId,
