@@ -534,6 +534,7 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         if (deviceId == Guid.Empty || string.IsNullOrWhiteSpace(deviceCredential))
             throw new UnauthorizedAccessException("Device credential is invalid.");
 
+        var credentialHash = SecretCodec.HashToken(deviceCredential);
         await using var connection = database.OpenConnection();
 
         Guid userId;
@@ -551,7 +552,7 @@ public sealed class EnrollmentStore(SqliteDatabase database)
                   AND u.disabled_utc IS NULL;
                 """;
             command.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
-            command.Parameters.AddWithValue("$credentialHash", SecretCodec.HashToken(deviceCredential));
+            command.Parameters.AddWithValue("$credentialHash", credentialHash);
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             if (!await reader.ReadAsync(cancellationToken))
@@ -562,6 +563,27 @@ public sealed class EnrollmentStore(SqliteDatabase database)
         }
 
         using var transaction = connection.BeginTransaction();
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var touchCredential = connection.CreateCommand())
+        {
+            touchCredential.Transaction = transaction;
+            touchCredential.CommandText =
+                """
+                UPDATE devices
+                SET credential_last_used_utc = $utc
+                WHERE device_id = $deviceId
+                  AND credential_hash = $credentialHash
+                  AND revoked_utc IS NULL;
+                """;
+            touchCredential.Parameters.AddWithValue("$utc", now.ToString("O"));
+            touchCredential.Parameters.AddWithValue("$deviceId", deviceId.ToString("D"));
+            touchCredential.Parameters.AddWithValue("$credentialHash", credentialHash);
+
+            if (await touchCredential.ExecuteNonQueryAsync(cancellationToken) != 1)
+                throw new UnauthorizedAccessException("Device credential is invalid or revoked.");
+        }
+
         var session = await CreateSessionAsync(
             connection,
             userId,
@@ -579,7 +601,7 @@ public sealed class EnrollmentStore(SqliteDatabase database)
             "DEVICE",
             deviceId,
             "{}",
-            DateTimeOffset.UtcNow,
+            now,
             cancellationToken);
 
         transaction.Commit();
