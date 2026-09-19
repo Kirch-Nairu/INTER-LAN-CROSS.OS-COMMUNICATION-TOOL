@@ -24,6 +24,7 @@ jobs:
       - run: dotnet restore InterLan.sln
       - run: dotnet build InterLan.sln --configuration Release --no-restore
       - run: dotnet run --project tools/InterLan.P1Checks/InterLan.P1Checks.csproj --configuration Release
+      - run: dotnet run --project tools/InterLan.P1NetworkSmoke/InterLan.P1NetworkSmoke.csproj --configuration Release
 
   web:
     name: P1 Android web-client compatibility
