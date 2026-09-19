@@ -388,6 +388,20 @@ public sealed class InterLanApiClient(HttpClient httpClient)
             ?? Array.Empty<UserPresenceResponse>();
     }
 
+    public async Task UnpairDeviceAsync(
+        CancellationToken cancellationToken = default)
+    {
+        RequireAuthenticated();
+
+        using var response = await _httpClient.PostAsync(
+            "/api/v1/auth/device/unpair",
+            content: null,
+            cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        _httpClient.DefaultRequestHeaders.Authorization = null;
+    }
+
     private void RequireAuthenticated()
     {
         if (_httpClient.DefaultRequestHeaders.Authorization is null)
