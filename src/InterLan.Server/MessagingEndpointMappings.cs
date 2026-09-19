@@ -91,6 +91,29 @@ public static class MessagingEndpointMappings
             }
         });
         
+        app.MapGet("/api/v1/direct/activity", async (
+            HttpContext context,
+            EnrollmentStore enrollment,
+            ChatStore chat,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                return Results.Ok(await chat.ListDirectConversationActivityAsync(
+                    principal.UserId,
+                    cancellationToken));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+        });
+        
         app.MapPost("/api/v1/direct", async (
             HttpContext context,
             OpenDirectConversationRequest request,
