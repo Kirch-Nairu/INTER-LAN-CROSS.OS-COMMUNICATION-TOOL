@@ -145,6 +145,7 @@ public sealed class GroupStore(SqliteDatabase database)
                 DateTimeOffset.Parse(reader.GetString(4))));
         }
 
+        await reader.DisposeAsync();
         transaction.Commit();
         return groups;
     }
@@ -887,6 +888,7 @@ public sealed class GroupStore(SqliteDatabase database)
         while (await reader.ReadAsync(cancellationToken))
             messages.Add(ReadMessage(reader));
 
+        await reader.DisposeAsync();
         transaction.Commit();
         return messages;
     }
@@ -970,6 +972,8 @@ public sealed class GroupStore(SqliteDatabase database)
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             descending.Add(ReadMessage(reader));
+
+        await reader.DisposeAsync();
 
         var hasOlder = descending.Count > limit;
         if (hasOlder)
@@ -1474,6 +1478,7 @@ public sealed class GroupStore(SqliteDatabase database)
                 DateTimeOffset.Parse(eventReader.GetString(6))));
         }
 
+        await eventReader.DisposeAsync();
         transaction.Commit();
         return events;
     }
