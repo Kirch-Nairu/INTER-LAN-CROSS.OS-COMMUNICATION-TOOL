@@ -180,7 +180,6 @@ public sealed class ChatStore(SqliteDatabase database)
                     FROM messages
                     WHERE scope_type = 'DIRECT'
                       AND scope_id = $conversationId
-                      AND deleted_utc IS NULL
                     ORDER BY created_utc DESC, message_id DESC
                     LIMIT 1;
                     """;
