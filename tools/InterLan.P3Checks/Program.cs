@@ -301,6 +301,39 @@ try
         },
         "group send rejects client message ID already consumed in direct scope");
 
+    var normalizedGroupMessage = await groups.SendGroupMessageAsync(
+        adminId,
+        created.GroupId,
+        new SendMessageRequest(Guid.NewGuid(), "  Cafe\u0301 group  "));
+
+    Check(
+        normalizedGroupMessage.Message.Body == "Café group",
+        "group message text is trimmed and normalized to Unicode NFC");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                adminId,
+                created.GroupId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    "unsafe\u0000group"));
+        },
+        "group message rejects unsupported control characters");
+
+    await ExpectArgumentAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                adminId,
+                created.GroupId,
+                new SendMessageRequest(
+                    Guid.NewGuid(),
+                    new string('x', GroupStore.MaxMessageLength + 1)));
+        },
+        "group message rejects oversized body");
+
     var firstClientMessageId = Guid.NewGuid();
     var firstMessage = await groups.SendGroupMessageAsync(
         ownerId,
@@ -477,9 +510,10 @@ try
         limit: 100);
 
     Check(
-        restartHistory.Count == 2 &&
-        restartHistory[0].MessageId == firstMessage.Message.MessageId &&
-        restartHistory[1].MessageId == reply.Message.MessageId,
+        restartHistory.Count == 3 &&
+        restartHistory[0].MessageId == normalizedGroupMessage.Message.MessageId &&
+        restartHistory[1].MessageId == firstMessage.Message.MessageId &&
+        restartHistory[2].MessageId == reply.Message.MessageId,
         "group message history survives restart in deterministic order");
 
     var ownerGroups = await restartedGroups.ListGroupsAsync(ownerId);
