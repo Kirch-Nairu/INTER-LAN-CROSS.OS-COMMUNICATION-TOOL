@@ -10,6 +10,15 @@ namespace InterLan.Server;
 
 public static class InterLanServerHost
 {
+    public static async Task<InterLanServerInstance> CreateAsync(
+        string[] args,
+        InterLanServerHostOptions hostOptions,
+        CancellationToken cancellationToken = default)
+    {
+        var application = await BuildAsync(args, hostOptions, cancellationToken);
+        return new InterLanServerInstance(application);
+    }
+
     public static Task<WebApplication> BuildAsync(
         string[] args,
         CancellationToken cancellationToken = default) =>
