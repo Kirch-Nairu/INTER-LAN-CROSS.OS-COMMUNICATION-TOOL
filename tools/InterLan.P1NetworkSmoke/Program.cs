@@ -29,7 +29,7 @@ using var process = new Process
     StartInfo = new ProcessStartInfo
     {
         FileName = "dotnet",
-        Arguments = $""{serverDll}"",
+        Arguments = $"\\\"{serverDll}\\\"",
         WorkingDirectory = repositoryRoot,
         UseShellExecute = false,
         RedirectStandardOutput = true,
