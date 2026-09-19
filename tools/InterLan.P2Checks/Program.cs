@@ -136,6 +136,15 @@ try
         normalizedMessage.Message.Body == "Café",
         "message text is trimmed and normalized to Unicode NFC");
 
+    Check(await ThrowsAsync<ArgumentException>(() =>
+        chat.SendDirectMessageAsync(
+            bob,
+            bc.ConversationId,
+            new SendMessageRequest(
+                Guid.NewGuid(),
+                "unsafe\u0000message"))),
+        "unsupported control characters fail closed");
+
     var listed = await chat.ListDirectConversationsAsync(alice);
     Check(listed.Count == 2, "direct conversation listing is membership scoped");
 
