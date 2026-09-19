@@ -107,3 +107,9 @@ public sealed record DirectMessageSearchResponse(
     Guid ConversationId,
     string Query,
     IReadOnlyList<MessageResponse> Items);
+
+public sealed record UserPresenceResponse(
+    Guid UserId,
+    bool IsOnline,
+    int ConnectionCount,
+    DateTimeOffset ObservedUtc);
