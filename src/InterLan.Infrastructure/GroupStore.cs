@@ -11,6 +11,10 @@ public sealed class GroupStore(SqliteDatabase database)
 
     private static SqliteTransaction BeginWriteTransaction(SqliteConnection connection) =>
         connection.BeginTransaction(deferred: false);
+
+    private static SqliteTransaction BeginReadTransaction(SqliteConnection connection) =>
+        connection.BeginTransaction(deferred: true);
+
     public async Task<GroupDetailsResponse> CreateGroupAsync(
         Guid actorUserId,
         CreateGroupRequest request,
