@@ -130,6 +130,18 @@ public sealed class PairedClientSessionManager(
         }
     }
 
+    public async Task UnpairAndForgetAsync(
+        string pairingStatePath,
+        PairedClientConnection connection,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+
+        var api = connection.CreateApiClient();
+        await api.UnpairDeviceAsync(cancellationToken);
+        _pairingStore.Delete(pairingStatePath);
+    }
+
     public static HttpClient CreatePinnedHttpClient(
         ClientPairingState pairing) =>
         PinnedTransportFactory.CreateHttpClient(pairing);
