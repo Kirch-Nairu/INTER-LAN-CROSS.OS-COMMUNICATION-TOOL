@@ -416,6 +416,14 @@ try
         afterDuplicateRace.Count == 22,
         "concurrent duplicate race adds exactly one message");
 
+    Check(await ThrowsAsync<UnauthorizedAccessException>(() =>
+        chat.SearchDirectMessagesAsync(
+            bob,
+            ac.ConversationId,
+            "concurrent",
+            20)),
+        "non-member cannot search another direct conversation");
+
     var searchResult = await chat.SearchDirectMessagesAsync(
         carol,
         ac.ConversationId,
