@@ -25,12 +25,7 @@ public static class ServerCertificateManager
             Create(certificatePath, privateKeyPath);
         }
 
-        var loaded = X509Certificate2.CreateFromPemFile(certificatePath, privateKeyPath);
-        var certificate = new X509Certificate2(
-            loaded.Export(X509ContentType.Pfx),
-            (string?)null,
-            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
-
+        var certificate = X509Certificate2.CreateFromPemFile(certificatePath, privateKeyPath);
         var fingerprint = Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
         return new ServerCertificateDescriptor(certificate, fingerprint, certificatePath, privateKeyPath);
     }
