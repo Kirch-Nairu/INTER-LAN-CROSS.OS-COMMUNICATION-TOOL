@@ -301,6 +301,71 @@ try
         reply.Message.ReplyToMessageId == firstMessage.Message.MessageId,
         "group reply targets active message in same group");
 
+    await groups.MarkGroupMessageDeliveredAsync(
+        memberId,
+        created.GroupId,
+        firstMessage.Message.MessageId);
+
+    var deliveredReceipts = await groups.GetGroupMessageReceiptsAsync(
+        ownerId,
+        created.GroupId,
+        firstMessage.Message.MessageId);
+
+    Check(
+        deliveredReceipts.Count == 1 &&
+        deliveredReceipts[0].UserId == memberId &&
+        deliveredReceipts[0].DeliveredUtc is not null &&
+        deliveredReceipts[0].ReadUtc is null,
+        "group delivery receipt records actual recipient acknowledgement");
+
+    await groups.MarkGroupMessageReadAsync(
+        memberId,
+        created.GroupId,
+        firstMessage.Message.MessageId);
+
+    var readReceipts = await groups.GetGroupMessageReceiptsAsync(
+        adminId,
+        created.GroupId,
+        firstMessage.Message.MessageId);
+
+    Check(
+        readReceipts.Count == 1 &&
+        readReceipts[0].UserId == memberId &&
+        readReceipts[0].DeliveredUtc is not null &&
+        readReceipts[0].ReadUtc is not null &&
+        readReceipts[0].ReadUtc >= readReceipts[0].DeliveredUtc,
+        "group read receipt preserves monotonic delivery state");
+
+    await ExpectInvalidOperationAsync(
+        async () =>
+        {
+            await groups.MarkGroupMessageReadAsync(
+                ownerId,
+                created.GroupId,
+                firstMessage.Message.MessageId);
+        },
+        "group sender cannot acknowledge own message");
+
+    await groups.RemoveMemberAsync(
+        adminId,
+        created.GroupId,
+        memberId);
+
+    await ExpectUnauthorizedAsync(
+        async () =>
+        {
+            await groups.MarkGroupMessageDeliveredAsync(
+                memberId,
+                created.GroupId,
+                firstMessage.Message.MessageId);
+        },
+        "removed member cannot mutate group receipt state");
+
+    await groups.AddMemberAsync(
+        ownerId,
+        created.GroupId,
+        new AddGroupMemberRequest(memberId));
+
     var page = await groups.GetGroupHistoryPageAsync(
         adminId,
         created.GroupId,
