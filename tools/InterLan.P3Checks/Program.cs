@@ -95,6 +95,7 @@ try
     }
 
     var groups = new GroupStore(database);
+    var chat = new ChatStore(database);
 
     var created = await groups.CreateGroupAsync(
         ownerId,
@@ -275,6 +276,30 @@ try
     Check(
         restored.Status == "ADDED" && restored.Role == "MEMBER",
         "removed membership can be restored without duplicate row");
+
+    var directConversation = await chat.GetOrCreateDirectConversationAsync(
+        ownerId,
+        adminId);
+    var crossScopeClientMessageId = Guid.NewGuid();
+
+    await chat.SendDirectMessageAsync(
+        ownerId,
+        directConversation.ConversationId,
+        new SendMessageRequest(
+            crossScopeClientMessageId,
+            "direct scope owns this idempotency key"));
+
+    await ExpectInvalidOperationAsync(
+        async () =>
+        {
+            await groups.SendGroupMessageAsync(
+                ownerId,
+                created.GroupId,
+                new SendMessageRequest(
+                    crossScopeClientMessageId,
+                    "group scope cannot reuse it"));
+        },
+        "group send rejects client message ID already consumed in direct scope");
 
     var firstClientMessageId = Guid.NewGuid();
     var firstMessage = await groups.SendGroupMessageAsync(
