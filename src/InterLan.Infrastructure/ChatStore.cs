@@ -213,12 +213,13 @@ public sealed class ChatStore(SqliteDatabase database)
         var messageId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
+        var inserted = 0;
         await using (var insert = connection.CreateCommand())
         {
             insert.Transaction = transaction;
             insert.CommandText =
                 """
-                INSERT INTO messages (
+                INSERT OR IGNORE INTO messages (
                     message_id, scope_type, scope_id, sender_user_id,
                     client_message_id, body, reply_to_message_id, created_utc
                 ) VALUES (
@@ -235,7 +236,29 @@ public sealed class ChatStore(SqliteDatabase database)
                 ? DBNull.Value
                 : request.ReplyToMessageId.Value.ToString("D"));
             insert.Parameters.AddWithValue("$created", now.ToString("O"));
-            await insert.ExecuteNonQueryAsync(cancellationToken);
+            inserted = await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (inserted == 0)
+        {
+            var concurrentExisting = await FindByClientMessageIdAsync(
+                connection,
+                transaction,
+                actorUserId,
+                request.ClientMessageId,
+                cancellationToken)
+                ?? throw new InvalidOperationException(
+                    "Message idempotency conflict could not be resolved.");
+
+            if (concurrentExisting.ScopeType != "DIRECT" ||
+                concurrentExisting.ScopeId != conversationId)
+            {
+                throw new InvalidOperationException(
+                    "ClientMessageId was already used for another message.");
+            }
+
+            transaction.Commit();
+            return new PersistedMessageResult(concurrentExisting, false);
         }
 
         transaction.Commit();
