@@ -47,6 +47,7 @@ try
     var lateMemberId = Guid.NewGuid();
     var sendRaceMemberId = Guid.NewGuid();
     var roleRaceMemberId = Guid.NewGuid();
+    var receiptRaceMemberId = Guid.NewGuid();
 
     await using (var connection = database.OpenConnection())
     {
@@ -57,7 +58,8 @@ try
             (memberId, "p3-member", "P3 Member", "MEMBER"),
             (lateMemberId, "p3-late", "P3 Late Member", "MEMBER"),
             (sendRaceMemberId, "p3-send-race", "P3 Send Race", "MEMBER"),
-            (roleRaceMemberId, "p3-role-race", "P3 Role Race", "MEMBER")
+            (roleRaceMemberId, "p3-role-race", "P3 Role Race", "MEMBER"),
+            (receiptRaceMemberId, "p3-receipt-race", "P3 Receipt Race", "MEMBER")
         })
         {
             await using var insert = connection.CreateCommand();
@@ -267,6 +269,54 @@ try
         roleAfterRemoval == "NOT_FOUND",
         "removed member cannot be role-mutated after the race");
 
+    await groups.AddMemberAsync(
+        ownerId,
+        group.GroupId,
+        new AddGroupMemberRequest(receiptRaceMemberId));
+
+    var receiptRaceMessage = history[0];
+    var removeVsReceipt = await Task.WhenAll(
+        CaptureMutationAsync(async () =>
+        {
+            await groups.MarkGroupMessageReadAsync(
+                receiptRaceMemberId,
+                group.GroupId,
+                receiptRaceMessage.MessageId);
+        }),
+        CaptureMutationAsync(async () =>
+        {
+            await groups.RemoveMemberAsync(
+                ownerId,
+                group.GroupId,
+                receiptRaceMemberId);
+        }));
+
+    Check(
+        removeVsReceipt[1] == "SUCCESS" &&
+        removeVsReceipt[0] is "SUCCESS" or "UNAUTHORIZED",
+        "remove-vs-receipt race linearizes without lock or authority failure");
+
+    var postRemovalReceipt = await CaptureMutationAsync(async () =>
+    {
+        await groups.MarkGroupMessageDeliveredAsync(
+            receiptRaceMemberId,
+            group.GroupId,
+            receiptRaceMessage.MessageId);
+    });
+
+    Check(
+        postRemovalReceipt == "UNAUTHORIZED",
+        "remove-vs-receipt race leaves member unable to mutate receipts");
+
+    var deliveryTargets = await groups.GetGroupDeliveryTargetUserIdsAsync(
+        group.GroupId);
+
+    Check(
+        !deliveryTargets.Contains(sendRaceMemberId) &&
+        !deliveryTargets.Contains(roleRaceMemberId) &&
+        !deliveryTargets.Contains(receiptRaceMemberId),
+        "delivery target projection excludes all members removed by authority races");
+
     var receiptTargets = history
         .Take(120)
         .ToArray();
@@ -351,8 +401,11 @@ try
 
     Check(
         restartedDetails.Members.All(member =>
-            member.UserId != lateMemberId),
-        "removed membership remains revoked after database reopen");
+            member.UserId != lateMemberId &&
+            member.UserId != sendRaceMemberId &&
+            member.UserId != roleRaceMemberId &&
+            member.UserId != receiptRaceMemberId),
+        "removed memberships remain revoked after database reopen");
 }
 finally
 {
