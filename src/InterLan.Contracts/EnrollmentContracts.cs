@@ -111,3 +111,13 @@ public sealed record SessionSummaryResponse(
 
 public sealed record RevokeOtherSessionsResponse(
     int RevokedCount);
+
+public sealed record CurrentDeviceSecurityResponse(
+    Guid DeviceId,
+    string DeviceName,
+    string Platform,
+    DateTimeOffset ApprovedUtc,
+    DateTimeOffset? LastSeenUtc,
+    DateTimeOffset? CredentialCreatedUtc,
+    DateTimeOffset? CredentialRotatedUtc,
+    DateTimeOffset? CredentialLastUsedUtc);
