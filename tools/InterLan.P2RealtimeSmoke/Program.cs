@@ -391,6 +391,55 @@ var baseUri = server.BaseUri;
 
     Console.WriteLine("PASS duplicate HTTP send does not duplicate persistence");
 
+    await using var mutationHub = CreateHub(baseUri, memberToken);
+    var editedEvent = new TaskCompletionSource<JsonElement>(
+        TaskCreationOptions.RunContinuationsAsynchronously);
+
+    mutationHub.On<JsonElement>("MessageEdited", message =>
+    {
+        editedEvent.TrySetResult(message);
+    });
+
+    await mutationHub.StartAsync();
+
+    using var mutableSend = await ownerHttp.PostAsJsonAsync(
+        $"/api/v1/direct/{conversationId:D}/messages",
+        new
+        {
+            clientMessageId = Guid.NewGuid(),
+            body = "mutable realtime message"
+        });
+
+    if (!mutableSend.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine("FAIL mutable realtime message send");
+        return 1;
+    }
+
+    var mutableMessage = await mutableSend.Content.ReadFromJsonAsync<JsonElement>();
+    var mutableMessageId = mutableMessage.GetProperty("messageId").GetGuid();
+
+    using var editResponse = await ownerHttp.PutAsJsonAsync(
+        $"/api/v1/direct/{conversationId:D}/messages/{mutableMessageId:D}",
+        new { body = "edited realtime message" });
+
+    if (!editResponse.IsSuccessStatusCode)
+    {
+        Console.Error.WriteLine(
+            $"FAIL realtime message edit {(int)editResponse.StatusCode}: {await editResponse.Content.ReadAsStringAsync()}");
+        return 1;
+    }
+
+    var editedRealtime = await editedEvent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    if (editedRealtime.GetProperty("messageId").GetGuid() != mutableMessageId ||
+        editedRealtime.GetProperty("body").GetString() != "edited realtime message")
+    {
+        Console.Error.WriteLine("FAIL realtime edit event payload mismatch");
+        return 1;
+    }
+
+    Console.WriteLine("PASS direct-message edit broadcasts durable realtime mutation");
+
     await using var revokedHub = CreateHub(baseUri, memberToken);
     var revokedHubClosed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
     revokedHub.Closed += _ =>
