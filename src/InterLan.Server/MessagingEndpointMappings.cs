@@ -285,6 +285,55 @@ public static class MessagingEndpointMappings
             }
         }).RequireRateLimiting("message");
         
+        app.MapDelete("/api/v1/direct/{conversationId:guid}/messages/{messageId:guid}", async (
+            Guid conversationId,
+            Guid messageId,
+            HttpContext context,
+            EnrollmentStore enrollment,
+            ChatStore chat,
+            IHubContext<ChatHub> hub,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var principal = await AuthorizationHelpers.RequireAuthenticatedAsync(
+                    context,
+                    enrollment,
+                    cancellationToken);
+
+                var deleted = await chat.DeleteDirectMessageAsync(
+                    principal.UserId,
+                    conversationId,
+                    messageId,
+                    cancellationToken);
+
+                var members = await chat.GetDirectMemberIdsAsync(
+                    principal.UserId,
+                    conversationId,
+                    cancellationToken);
+
+                foreach (var memberId in members)
+                {
+                    await hub.Clients.Group(ChatHub.UserGroup(memberId))
+                        .SendAsync("MessageDeleted", deleted, cancellationToken);
+                }
+
+                return Results.Ok(deleted);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Results.Unauthorized();
+            }
+            catch (InvalidOperationException exception)
+            {
+                return Results.Conflict(new { error = exception.Message });
+            }
+            catch (KeyNotFoundException exception)
+            {
+                return Results.NotFound(new { error = exception.Message });
+            }
+        }).RequireRateLimiting("message");
+        
         app.MapGet("/api/v1/messages/{messageId:guid}/receipts", async (
             Guid messageId,
             HttpContext context,
