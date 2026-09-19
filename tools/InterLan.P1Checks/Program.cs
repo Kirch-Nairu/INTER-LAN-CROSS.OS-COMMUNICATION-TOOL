@@ -167,6 +167,23 @@ try
     var principal = await store.ValidateSessionAsync(memberSession.BearerToken);
     Check(principal is not null && principal.Role == "MEMBER", "active member session validates");
 
+    var pairingRestartDatabase = new SqliteDatabase(Path.Combine(root, "p1.db"));
+    await pairingRestartDatabase.InitializeAsync();
+    var pairingRestartStore = new EnrollmentStore(pairingRestartDatabase);
+    var pairingAfterRestart = await pairingRestartStore.ValidateSessionAsync(memberSession.BearerToken);
+    Check(
+        pairingAfterRestart is not null &&
+        pairingAfterRestart.UserId == decision.UserId &&
+        pairingAfterRestart.DeviceId == decision.DeviceId,
+        "approved client pairing and active session survive server restart");
+
+    var devicesAfterRestart = await pairingRestartStore.ListDevicesAsync(owner.OwnerUserId);
+    Check(
+        devicesAfterRestart.Count == 1 &&
+        devicesAfterRestart[0].DeviceId == decision.DeviceId &&
+        devicesAfterRestart[0].RevokedUtc is null,
+        "approved device record survives server restart");
+
     await store.RevokeDeviceAsync(owner.OwnerUserId, decision.DeviceId!.Value);
     var revoked = await store.ValidateSessionAsync(memberSession.BearerToken);
     Check(revoked is null, "device revocation invalidates existing sessions");
