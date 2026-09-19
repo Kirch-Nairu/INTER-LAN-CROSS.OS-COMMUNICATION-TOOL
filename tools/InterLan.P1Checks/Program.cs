@@ -38,6 +38,7 @@ try
     var cert2 = ServerCertificateManager.LoadOrCreate(root);
 
     Check(cert1.Sha256Fingerprint == cert2.Sha256Fingerprint, "persistent TLS certificate fingerprint survives reload");
+    Check(cert1.Certificate.HasPrivateKey && cert2.Certificate.HasPrivateKey, "TLS certificate reload preserves usable private key");
     Check(File.Exists(cert1.PrivateKeyPath) && new FileInfo(cert1.PrivateKeyPath).Length > 0, "server private key persists on owner host");
     Check(cert1.Sha256Fingerprint.Length == 64 && cert1.Sha256Fingerprint.All(Uri.IsHexDigit), "certificate fingerprint is SHA-256 hex");
 

@@ -25,7 +25,23 @@ public static class ServerCertificateManager
             Create(certificatePath, privateKeyPath);
         }
 
-        var certificate = X509Certificate2.CreateFromPemFile(certificatePath, privateKeyPath);
+        using var pemCertificate = X509Certificate2.CreateFromPemFile(certificatePath, privateKeyPath);
+
+        // Rehydrate through PKCS#12 so Windows Schannel/Kestrel gets a certificate
+        // whose private key is backed in a form it can actually use for TLS handshakes.
+        // EphemeralKeySet is intentionally avoided because macOS rejected that mode.
+        var pfxBytes = pemCertificate.Export(X509ContentType.Pkcs12);
+        var certificate = X509CertificateLoader.LoadPkcs12(
+            pfxBytes,
+            password: null,
+            keyStorageFlags: X509KeyStorageFlags.Exportable);
+
+        if (!certificate.HasPrivateKey)
+        {
+            certificate.Dispose();
+            throw new InvalidOperationException("Loaded INTER-LAN server certificate has no private key.");
+        }
+
         var fingerprint = Convert.ToHexString(SHA256.HashData(certificate.RawData)).ToLowerInvariant();
         return new ServerCertificateDescriptor(certificate, fingerprint, certificatePath, privateKeyPath);
     }
