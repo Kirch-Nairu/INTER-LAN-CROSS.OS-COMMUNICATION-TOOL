@@ -265,6 +265,35 @@ try
             device.RevokedUtc is null),
         "all approved device records survive server restart");
 
+    var rotatedSession = await pairingRestartStore.RotateDeviceCredentialAsync(
+        decision.UserId!.Value,
+        renewedAfterRestart.SessionId,
+        decision.DeviceId!.Value,
+        TimeSpan.FromHours(1));
+
+    Check(
+        !string.IsNullOrWhiteSpace(rotatedSession.DeviceCredential) &&
+        rotatedSession.DeviceCredential != memberSession.DeviceCredential,
+        "device credential rotation returns a new credential");
+
+    var oldCredentialRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
+        pairingRestartStore.RenewDeviceSessionAsync(
+            decision.DeviceId.Value,
+            memberSession.DeviceCredential!,
+            TimeSpan.FromHours(1)));
+    Check(oldCredentialRejected, "rotated device credential invalidates previous credential");
+
+    var priorSessionAfterRotation = await pairingRestartStore.ValidateSessionAsync(
+        renewedAfterRestart.BearerToken);
+    Check(priorSessionAfterRotation is null, "credential rotation revokes prior device sessions");
+
+    var rotatedPrincipal = await pairingRestartStore.ValidateSessionAsync(
+        rotatedSession.BearerToken);
+    Check(
+        rotatedPrincipal is not null &&
+        rotatedPrincipal.DeviceId == decision.DeviceId,
+        "credential rotation returns an active replacement session");
+
     await store.RevokeDeviceAsync(owner.OwnerUserId, decision.DeviceId!.Value);
     var revoked = await store.ValidateSessionAsync(memberSession.BearerToken);
     Check(revoked is null, "device revocation invalidates existing sessions");
@@ -272,7 +301,7 @@ try
     var renewalAfterRevokeRejected = await ThrowsAsync<UnauthorizedAccessException>(() =>
         store.RenewDeviceSessionAsync(
             decision.DeviceId.Value,
-            memberSession.DeviceCredential!,
+            rotatedSession.DeviceCredential!,
             TimeSpan.FromHours(1)));
     Check(renewalAfterRevokeRejected, "revoked device credential cannot mint a new session");
 
