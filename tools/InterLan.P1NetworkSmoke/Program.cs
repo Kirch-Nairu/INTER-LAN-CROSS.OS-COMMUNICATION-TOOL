@@ -45,6 +45,7 @@ process.Start();
 
 using var handler = new HttpClientHandler
 {
+    UseProxy = false,
     ServerCertificateCustomValidationCallback = (_, _, _, _) => true
 };
 using var client = new HttpClient(handler)
