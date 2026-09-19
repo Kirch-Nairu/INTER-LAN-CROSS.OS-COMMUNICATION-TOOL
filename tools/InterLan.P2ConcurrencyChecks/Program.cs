@@ -127,6 +127,20 @@ try
     Check(
         mixedWrites.Result.All(write => write.Created),
         "mixed message and receipt workloads complete concurrently");
+
+    var reopened = new SqliteDatabase(Path.Combine(root, "p2-concurrency.db"));
+    await reopened.InitializeAsync();
+    var reopenedChat = new ChatStore(reopened);
+
+    var restartHistory = await reopenedChat.GetDirectHistoryAsync(
+        bob,
+        conversation.ConversationId,
+        null,
+        250);
+
+    Check(
+        restartHistory.Count == 241,
+        "mixed concurrent workload survives database reopen");
 }
 finally
 {
