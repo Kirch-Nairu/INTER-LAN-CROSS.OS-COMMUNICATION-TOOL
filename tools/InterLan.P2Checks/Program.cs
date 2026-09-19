@@ -25,6 +25,12 @@ Check(
     !authPartition.Contains("p2-rate-limit-token-a", StringComparison.Ordinal),
     "authenticated rate-limit partition is stable without exposing bearer token");
 
+var authRateContextB = new DefaultHttpContext();
+authRateContextB.Request.Headers.Authorization = "Bearer p2-rate-limit-token-b";
+Check(
+    authPartition != RateLimitPartitionKeys.AuthenticatedClient(authRateContextB),
+    "authenticated rate-limit partitions isolate distinct sessions");
+
 var failures = new List<string>();
 
 void Check(bool condition, string name)
