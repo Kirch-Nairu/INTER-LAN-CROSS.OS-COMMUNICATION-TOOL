@@ -416,6 +416,20 @@ try
         afterDuplicateRace.Count == 22,
         "concurrent duplicate race adds exactly one message");
 
+    var searchResult = await chat.SearchDirectMessagesAsync(
+        carol,
+        ac.ConversationId,
+        "concurrent-0",
+        50);
+
+    Check(
+        searchResult.Items.Count > 0 &&
+        searchResult.Items.All(message =>
+            message.Body.Contains(
+                "concurrent-0",
+                StringComparison.OrdinalIgnoreCase)),
+        "authorized direct-message search returns scoped matching messages");
+
     var recentPage = await chat.GetDirectRecentHistoryPageAsync(
         carol,
         ac.ConversationId,
