@@ -12,6 +12,7 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
     private TunnelRuntimeState _state = TunnelRuntimeState.Disabled;
     private bool _remoteEnabled;
     private bool _disposed;
+    private int _generation;
 
     public RemoteAccessCoordinator(
         HostRuntimeOptions options,
@@ -60,6 +61,7 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
         {
             ThrowIfDisposed();
             _remoteEnabled = true;
+            InvalidateCurrentWatcher();
             Volatile.Write(ref _state, _state.Restarting(1, "Manual Quick Tunnel restart requested."));
             await StopProcessCoreAsync(cancellationToken);
             return await StartCoreAsync(restartAttempt: 1, cancellationToken);
@@ -76,6 +78,7 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
         try
         {
             _remoteEnabled = false;
+            InvalidateCurrentWatcher();
             Volatile.Write(ref _state, _state with
             {
                 Phase = TunnelRuntimePhase.Stopping,
@@ -151,7 +154,8 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
                     CloudflaredQuickTunnelPlan.ComponentName),
                 cancellationToken);
 
-            _ = RecoverAfterExitAsync();
+            var generation = Interlocked.Increment(ref _generation);
+            _ = RecoverAfterExitAsync(generation);
             return connected;
         }
         catch (Exception ex) when (ex is InvalidOperationException or TimeoutException or System.ComponentModel.Win32Exception)
@@ -164,14 +168,16 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
         }
     }
 
-    private async Task RecoverAfterExitAsync()
+    private async Task RecoverAfterExitAsync(int generation)
     {
         var exit = await _supervisor.WaitForExitAsync(CloudflaredQuickTunnelPlan.ComponentName);
 
         await _gate.WaitAsync();
         try
         {
-            if (!_remoteEnabled || _state.Phase is TunnelRuntimePhase.Disabled or TunnelRuntimePhase.Stopping)
+            if (generation != Volatile.Read(ref _generation) ||
+                !_remoteEnabled ||
+                _state.Phase is TunnelRuntimePhase.Disabled or TunnelRuntimePhase.Stopping)
             {
                 return;
             }
@@ -184,7 +190,7 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
             await PublishDegradedAsync(reason, CancellationToken.None);
 
             var completedAttempts = 0;
-            while (_remoteEnabled)
+            while (_remoteEnabled && generation == Volatile.Read(ref _generation))
             {
                 var decision = _restartPolicy.Decide(completedAttempts, _network.IsNetworkAvailable);
                 if (!decision.ShouldRestart)
@@ -255,6 +261,7 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
             if (!available)
             {
                 const string detail = "Network became unavailable; stopping remote transport while preserving local host authority.";
+                InvalidateCurrentWatcher();
                 Volatile.Write(ref _state, _state.Degraded(detail));
                 await StopProcessCoreAsync(CancellationToken.None);
                 await PublishDegradedAsync(detail, CancellationToken.None);
@@ -271,6 +278,8 @@ public sealed class RemoteAccessCoordinator : IAsyncDisposable
             _gate.Release();
         }
     }
+
+    private void InvalidateCurrentWatcher() => Interlocked.Increment(ref _generation);
 
     private void ThrowIfDisposed()
     {

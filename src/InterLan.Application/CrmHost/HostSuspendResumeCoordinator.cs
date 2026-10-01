@@ -28,7 +28,7 @@ public sealed class HostSuspendResumeCoordinator
         _events = events ?? throw new ArgumentNullException(nameof(events));
     }
 
-    public HostPowerState State => Volatile.Read(ref _state);
+    public HostPowerState State => _state;
 
     public async Task SuspendAsync(CancellationToken cancellationToken = default)
     {
@@ -40,7 +40,7 @@ public sealed class HostSuspendResumeCoordinator
                 return;
             }
 
-            Volatile.Write(ref _state, HostPowerState.Suspending);
+            _state = HostPowerState.Suspending;
             _hostWasRunning = _host.Snapshot.Phase is HostRuntimePhase.Ready or HostRuntimePhase.Degraded;
             _restoreRemoteAccess = _remote.RemoteAccessState.Phase is not TunnelRuntimePhase.Disabled;
 
@@ -56,7 +56,7 @@ public sealed class HostSuspendResumeCoordinator
                 await _remote.DisableRemoteAccessAsync(cancellationToken);
             }
 
-            Volatile.Write(ref _state, HostPowerState.Suspended);
+            _state = HostPowerState.Suspended;
             await _events.PublishAsync(
                 new HostLifecycleEvent(
                     HostLifecycleEventKind.Suspended,
@@ -80,7 +80,7 @@ public sealed class HostSuspendResumeCoordinator
                 return;
             }
 
-            Volatile.Write(ref _state, HostPowerState.Resuming);
+            _state = HostPowerState.Resuming;
             await _events.PublishAsync(
                 new HostLifecycleEvent(
                     HostLifecycleEventKind.ResumeRequested,
@@ -99,7 +99,7 @@ public sealed class HostSuspendResumeCoordinator
 
             _hostWasRunning = false;
             _restoreRemoteAccess = false;
-            Volatile.Write(ref _state, HostPowerState.Active);
+            _state = HostPowerState.Active;
 
             await _events.PublishAsync(
                 new HostLifecycleEvent(
