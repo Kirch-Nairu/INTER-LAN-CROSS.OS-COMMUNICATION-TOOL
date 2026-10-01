@@ -2,21 +2,45 @@
 
 Technical Authority: Kirch Ivan Balite
 
-Status: **ACTIVE — TWO WRITERS ASSIGNED**
+Status: **PAUSED — BASELINE SOURCE FAILURE**
 
 Rebaseline authority branch:
 
 `KIRCH-INTERLAN-DEVELOPER-OPS-CRM-REBASELINE`
 
-Common repaired source candidate:
+Current attempted common source:
 
 `b0bed39e4f1b7bfeb17a65d85383362e74f65b35`
 
-The known compile-blocking malformed control-character literals in `src/InterLan.Domain/MessageTextPolicy.cs` were repaired on this source candidate. The repaired blob bytes were independently re-read and confirmed to contain escaped `\t`, `\r`, and `\n` source sequences rather than embedded control bytes.
+The first bootstrap defect in `src/InterLan.Domain/MessageTextPolicy.cs` was repaired on this source candidate. Both assigned sprint writers correctly stopped at their mandatory pre-mutation gate because their local execution environments could not provide the required .NET/runtime proof.
 
-No full runtime/Actions proof was attached to this exact commit at staging time. Therefore both writers MUST independently run the Release build and aggregate SuiteChecks before their first CRM product mutation. A pre-existing failure causes an immediate BLOCKED return; neither writer may silently expand scope to repair unrelated code.
+Maintainer then established an independent exact-source GitHub Actions harness on:
 
-The bootstrap repair is infrastructure prerequisite work and does not count toward either writer's 40 sprint commits.
+`KIRCH-INTERLAN-CRM-S001-BASELINE-VALIDATION`
+
+Workflow:
+
+`CRM S001 Exact Baseline`
+
+Run:
+
+`36804002006`
+
+The harness explicitly checked out and asserted the exact source SHA `b0bed39e4f1b7bfeb17a65d85383362e74f65b35`, installed .NET 10, restored the solution successfully, and then reproduced a second pre-existing compiler defect:
+
+`src/InterLan.Infrastructure/ChatStore.cs(456,26): CS0173`
+
+The failing declaration uses targetless `var` inference for a conditional expression whose branches are non-nullable `DateTimeOffset` and `null`.
+
+Aggregate SuiteChecks were skipped because the Release build prerequisite failed.
+
+Therefore `b0bed39...` is **not** a green Sprint 001 source and must not be used for CRM implementation.
+
+The second bounded prerequisite repair is governed by:
+
+`00-HANDOFF/CRM_S001_BASELINE_REPAIR_02.md`
+
+No bootstrap repair counts toward either writer's 40 sprint commits.
 
 ## Writer A — Authority Core
 
@@ -28,13 +52,15 @@ Branch:
 
 `KIRCH-INTERLAN-CRM-S001-A-AUTHORITY-CORE`
 
-Created from exactly:
+Current branch remains exactly:
 
 `b0bed39e4f1b7bfeb17a65d85383362e74f65b35`
 
-Target: **40 substantive atomic code commits**.
+Sprint commits: **0 / 40**
 
-Primary ownership: CRM domain authority, workflow/state policy, persistence, candidate/SHA evidence, declarative JSON work-package import, server contracts/endpoints and focused executable proof.
+State: **PAUSED / CLEAN**
+
+Primary ownership after resume: CRM domain authority, workflow/state policy, persistence, candidate/SHA evidence, declarative JSON work-package import, server contracts/endpoints and focused executable proof.
 
 Decision log:
 
@@ -50,19 +76,35 @@ Branch:
 
 `KIRCH-INTERLAN-CRM-S001-B-LINUX-RUNTIME`
 
-Created from exactly:
+Current branch remains exactly:
 
 `b0bed39e4f1b7bfeb17a65d85383362e74f65b35`
 
-Target: **40 substantive atomic code commits**.
+Sprint commits: **0 / 40**
 
-Primary ownership: Debian/KDE host runtime, native Lead shell, Linux lifecycle/path/state abstractions, CLI-oriented start/stop/status orchestration, local gateway ownership, `cloudflared` Quick Tunnel process supervision, Remote Access native state and focused executable proof.
+State: **PAUSED / CLEAN**
+
+Primary ownership after resume: Debian/KDE host runtime, native Lead shell, Linux lifecycle/path/state abstractions, CLI-oriented start/stop/status orchestration, local gateway ownership, `cloudflared` Quick Tunnel process supervision, Remote Access native state and focused executable proof.
 
 Decision log:
 
 `docs/decisions/CRM_SPRINT_001_B_DECISIONS.md`
 
-## Parallel ownership law
+## Resume law
+
+Do not continue either 40-commit lane from `b0bed39...`.
+
+Required sequence:
+
+1. apply only the bounded ChatStore baseline repair;
+2. produce a new exact candidate SHA;
+3. retarget the Maintainer exact-source harness to that SHA;
+4. require exact SHA assertion, restore, Release build and aggregate SuiteChecks to PASS;
+5. if another pre-existing defect appears, route another bounded baseline repair;
+6. once a source is proven green, fan both Writer A and Writer B branches from the same exact green SHA;
+7. only then begin the 40 + 40 substantive sprint counters.
+
+## Parallel ownership law after resume
 
 Writer A owns CRM authority/domain/persistence/server-policy work.
 
@@ -72,7 +114,7 @@ They must not casually modify each other's owned directories. Shared composition
 
 ## Code-only emphasis
 
-This sprint is implementation-first.
+The sprint remains implementation-first.
 
 The only active documentation expected from each writer is its dedicated major-decision log. Do not expand README/product prose/handoff documents during normal implementation.
 
@@ -99,4 +141,4 @@ If the authorized lane is genuinely complete before 40 meaningful commits, the w
 
 Neither writer may merge, promote, deploy or self-accept.
 
-After both returns, Maintainer must independently compare both candidates to the common source, inspect overlap/shared-file edits, run integration/review and produce a separate disposition.
+After both completed returns, Maintainer must independently compare both candidates to the proven common source, inspect overlap/shared-file edits, run integration/review and produce a separate disposition.
