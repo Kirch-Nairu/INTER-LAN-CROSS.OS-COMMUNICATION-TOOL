@@ -51,7 +51,7 @@ public sealed class LoopbackReadinessProbe
                     $"Readiness endpoint returned HTTP {(int)response.StatusCode}.");
             }
             catch (Exception ex) when (
-                ex is HttpRequestException or TaskCanceledException &&
+                (ex is HttpRequestException or TaskCanceledException) &&
                 !cancellationToken.IsCancellationRequested)
             {
                 lastFailure = ex;
