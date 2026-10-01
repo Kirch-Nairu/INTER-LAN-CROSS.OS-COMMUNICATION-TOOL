@@ -4,6 +4,8 @@ public sealed record HostRuntimeOptions
 {
     public required LinuxHostPaths Paths { get; init; }
 
+    public Uri LocalBackendUri { get; init; } = new("https://127.0.0.1:5443");
+
     public Uri LocalGatewayUri { get; init; } = new("http://127.0.0.1:5080");
 
     public bool RemoteAccessEnabled { get; init; }
@@ -20,6 +22,12 @@ public sealed record HostRuntimeOptions
 
     public void Validate()
     {
+        if (!LocalBackendUri.IsLoopback ||
+            !string.Equals(LocalBackendUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("The canonical CRM backend must use HTTPS on loopback.");
+        }
+
         if (!LocalGatewayUri.IsLoopback)
         {
             throw new InvalidOperationException("The CRM gateway must bind to loopback before remote tunneling.");
@@ -29,6 +37,11 @@ public sealed record HostRuntimeOptions
             !string.Equals(LocalGatewayUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("The local CRM gateway must use HTTP or HTTPS.");
+        }
+
+        if (LocalBackendUri.Port == LocalGatewayUri.Port)
+        {
+            throw new InvalidOperationException("The canonical backend and staff gateway must not share a port.");
         }
 
         if (string.IsNullOrWhiteSpace(CloudflaredExecutable))

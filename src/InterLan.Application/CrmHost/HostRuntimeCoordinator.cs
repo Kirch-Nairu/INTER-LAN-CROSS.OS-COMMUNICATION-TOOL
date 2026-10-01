@@ -66,6 +66,32 @@ public sealed class HostRuntimeCoordinator
         }
     }
 
+    public HostRuntimeSnapshot MarkFaulted(string detail, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(detail);
+        if (_stateMachine.Phase != HostRuntimePhase.Faulted)
+        {
+            _stateMachine.TransitionTo(HostRuntimePhase.Faulted);
+        }
+
+        lock (_gate)
+        {
+            _snapshot = _snapshot with
+            {
+                Phase = HostRuntimePhase.Faulted,
+                Database = ToFailedIfStarting(_snapshot.Database),
+                Backend = ToFailedIfStarting(_snapshot.Backend),
+                Gateway = ToFailedIfStarting(_snapshot.Gateway),
+                NativeControl = ToFailedIfStarting(_snapshot.NativeControl),
+                Tunnel = ToFailedIfStarting(_snapshot.Tunnel),
+                PublicGatewayUri = null,
+                UpdatedAt = now,
+                Detail = detail
+            };
+            return _snapshot;
+        }
+    }
+
     public HostRuntimeSnapshot MarkTunnelState(RuntimeComponentState state, Uri? publicGatewayUri, string detail, DateTimeOffset now)
     {
         if (state == RuntimeComponentState.Ready && publicGatewayUri is null)
@@ -133,4 +159,7 @@ public sealed class HostRuntimeCoordinator
             return _snapshot;
         }
     }
+
+    private static RuntimeComponentState ToFailedIfStarting(RuntimeComponentState state) =>
+        state == RuntimeComponentState.Starting ? RuntimeComponentState.Failed : state;
 }

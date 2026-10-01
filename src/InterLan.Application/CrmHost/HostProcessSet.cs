@@ -20,6 +20,26 @@ public sealed class HostProcessSet : IAsyncDisposable
         _events = events ?? throw new ArgumentNullException(nameof(events));
     }
 
+    public async Task<ManagedChildProcess> StartBackendAsync(CancellationToken cancellationToken = default)
+    {
+        var plan = BackendProcessPlan.Create(
+            _serverAssemblyPath,
+            _options.Paths,
+            _options.LocalBackendUri);
+
+        var child = await _supervisor.StartAsync(plan, cancellationToken);
+        await _events.PublishAsync(
+            new HostLifecycleEvent(
+                HostLifecycleEventKind.BackendStarted,
+                DateTimeOffset.UtcNow,
+                "Canonical loopback CRM backend process started and awaits readiness proof.",
+                child.ProcessId,
+                BackendProcessPlan.ComponentName),
+            cancellationToken);
+
+        return child;
+    }
+
     public async Task<ManagedChildProcess> StartGatewayAsync(CancellationToken cancellationToken = default)
     {
         var plan = GatewayProcessPlan.Create(
