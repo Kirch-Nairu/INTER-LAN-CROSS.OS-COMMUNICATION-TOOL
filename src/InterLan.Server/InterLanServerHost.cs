@@ -1,6 +1,8 @@
 using System.Net;
 using InterLan.Application;
 using InterLan.Infrastructure;
+using InterLan.Infrastructure.Crm;
+using InterLan.Server.Crm;
 using InterLan.Server.Networking;
 using InterLan.Server.Realtime;
 using Microsoft.AspNetCore.RateLimiting;
@@ -36,8 +38,6 @@ public static class InterLanServerHost
         if (hostOptions.ConfigurationOverrides is { Count: > 0 })
             builder.Configuration.AddInMemoryCollection(hostOptions.ConfigurationOverrides);
 
-        // Browser SignalR transports may need the standard access_token query parameter.
-        // Suppress framework request-start logging so bearer material is not written to logs.
         builder.Logging.AddFilter(
             "Microsoft.AspNetCore.Hosting.Diagnostics",
             LogLevel.Warning);
@@ -83,6 +83,7 @@ public static class InterLanServerHost
         builder.Services.AddSingleton<IServerIdentityStore, SqliteServerIdentityStore>();
         builder.Services.AddSingleton<EnrollmentStore>();
         builder.Services.AddSingleton<ChatStore>();
+        builder.Services.AddSingleton<CrmAuthorityStore>();
         builder.Services.AddSingleton<RealtimeConnectionRegistry>();
         builder.Services.AddSingleton<RealtimeTicketStore>();
         builder.Services.AddHostedService<LanDiscoveryBroadcaster>();
@@ -136,6 +137,7 @@ public static class InterLanServerHost
         app.MapInterLanSystemEndpoints();
         app.MapInterLanEnrollmentEndpoints();
         app.MapInterLanMessagingEndpoints();
+        app.MapInterLanCrmEndpoints();
 
         app.MapHub<ControlHub>("/hubs/control");
         app.MapHub<ChatHub>("/hubs/chat");
