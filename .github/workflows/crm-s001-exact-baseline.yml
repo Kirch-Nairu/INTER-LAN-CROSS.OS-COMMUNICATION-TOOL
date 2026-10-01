@@ -17,7 +17,7 @@ jobs:
       - name: Checkout exact repaired source
         uses: actions/checkout@v4
         with:
-          ref: b0bed39e4f1b7bfeb17a65d85383362e74f65b35
+          ref: ca9291bab5d5d94d8eb79f213023530bc05929af
           fetch-depth: 1
 
       - name: Assert exact source SHA
@@ -25,7 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           actual="$(git rev-parse HEAD)"
-          expected="b0bed39e4f1b7bfeb17a65d85383362e74f65b35"
+          expected="ca9291bab5d5d94d8eb79f213023530bc05929af"
           printf 'Expected: %s\nActual:   %s\n' "$expected" "$actual"
           test "$actual" = "$expected"
 
