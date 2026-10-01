@@ -11,7 +11,7 @@ public sealed record CrmRequirement
     public string Id { get; }
     public string Text { get; }
 
-    internal static string NormalizeKey(string value, string parameterName)
+    public static string NormalizeKey(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         var normalized = value.Trim().ToUpperInvariant();
@@ -20,7 +20,7 @@ public sealed record CrmRequirement
         return normalized;
     }
 
-    internal static string NormalizeText(string value, string parameterName)
+    public static string NormalizeText(string value, string parameterName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value, parameterName);
         var normalized = value.Trim();

@@ -225,17 +225,17 @@ public sealed partial class CrmAuthorityStore
         audit.Parameters.AddWithValue("$actor", actorUserId.ToString("D"));
         audit.Parameters.AddWithValue(
             "$workPackage",
-            workPackageId is { } packageId ? packageId.Value : DBNull.Value);
+            workPackageId is { } packageId ? (object)packageId.Value : DBNull.Value);
         audit.Parameters.AddWithValue(
             "$candidate",
-            candidateId is { } candidate ? candidate.ToString("D") : DBNull.Value);
+            candidateId is { } candidate ? (object)candidate.ToString("D") : DBNull.Value);
         audit.Parameters.AddWithValue("$eventType", eventType);
         audit.Parameters.AddWithValue(
             "$beforeState",
-            beforeState is { } before ? CrmWorkflowVocabulary.Serialize(before) : DBNull.Value);
+            beforeState is { } before ? (object)CrmWorkflowVocabulary.Serialize(before) : DBNull.Value);
         audit.Parameters.AddWithValue(
             "$afterState",
-            afterState is { } after ? CrmWorkflowVocabulary.Serialize(after) : DBNull.Value);
+            afterState is { } after ? (object)CrmWorkflowVocabulary.Serialize(after) : DBNull.Value);
         audit.Parameters.AddWithValue("$payload", JsonSerializer.Serialize(payload));
         audit.Parameters.AddWithValue("$utc", now.ToString("O"));
         await audit.ExecuteNonQueryAsync(cancellationToken);
