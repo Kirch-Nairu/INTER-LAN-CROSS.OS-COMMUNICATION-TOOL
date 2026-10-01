@@ -62,7 +62,7 @@ public sealed record CrmScopeRule
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
         var normalized = pattern.Trim().Replace('\\', '/');
-        if (normalized.StartsWith('/', StringComparison.Ordinal) ||
+        if (normalized.StartsWith("/", StringComparison.Ordinal) ||
             normalized.Contains("../", StringComparison.Ordinal) ||
             normalized == "..")
         {
