@@ -12,7 +12,9 @@ var checks = new[]
     ("P2 REALTIME", "tools/InterLan.P2RealtimeSmoke/InterLan.P2RealtimeSmoke.csproj"),
     ("P2 CONCURRENCY", "tools/InterLan.P2ConcurrencyChecks/InterLan.P2ConcurrencyChecks.csproj"),
     ("MIGRATIONS", "tools/InterLan.MigrationChecks/InterLan.MigrationChecks.csproj"),
-    ("DESKTOP OWNER HOST", "tools/InterLan.DesktopChecks/InterLan.DesktopChecks.csproj")
+    ("DESKTOP OWNER HOST", "tools/InterLan.DesktopChecks/InterLan.DesktopChecks.csproj"),
+    ("CRM AUTHORITY", "tools/InterLan.CrmAuthorityChecks/InterLan.CrmAuthorityChecks.csproj"),
+    ("CRM IMPORT", "tools/InterLan.CrmImportChecks/InterLan.CrmImportChecks.csproj")
 };
 
 foreach (var (name, relativeProject) in checks)
@@ -70,5 +72,5 @@ foreach (var (name, relativeProject) in checks)
 }
 
 Console.WriteLine();
-Console.WriteLine("INTER-LAN P0-P2 AGGREGATE SUITE: PASS");
+Console.WriteLine("INTER-LAN P0-P2 + CRM AGGREGATE SUITE: PASS");
 return 0;
