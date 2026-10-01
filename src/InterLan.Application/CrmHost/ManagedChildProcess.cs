@@ -59,6 +59,10 @@ public sealed class ManagedChildProcess : IAsyncDisposable
         }
     }
 
+    public IReadOnlyList<string> StandardOutputSnapshot() => _standardOutput.Snapshot();
+
+    public IReadOnlyList<string> StandardErrorSnapshot() => _standardError.Snapshot();
+
     public static ManagedChildProcess Start(ProcessLaunchSpec spec)
     {
         ArgumentNullException.ThrowIfNull(spec);
