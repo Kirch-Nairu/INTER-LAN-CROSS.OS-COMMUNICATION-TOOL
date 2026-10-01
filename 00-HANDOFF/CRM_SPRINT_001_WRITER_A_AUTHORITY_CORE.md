@@ -10,7 +10,11 @@ Commit target: 40 substantive atomic commits. No padding, empty commits, formatt
 
 ## Source and branch
 
-The exact source SHA will be the CRM Sprint 001 repaired baseline produced after the known `MessageTextPolicy.cs` bootstrap defect is corrected and verified.
+Common repaired source candidate:
+
+`b0bed39e4f1b7bfeb17a65d85383362e74f65b35`
+
+This source contains the bounded bootstrap repair for the previously malformed `MessageTextPolicy.cs` control-character literals. The repaired blob bytes were independently re-read after mutation. The staging Maintainer did **not** obtain a full runtime/Actions proof for this exact commit, so Writer A MUST establish the Release build and aggregate SuiteChecks before any CRM product mutation. If that preflight fails, stop and return the exact blocker rather than coding around it.
 
 Writer branch:
 
@@ -143,7 +147,7 @@ If the authorized scope is genuinely complete before 40 meaningful commits, STOP
 
 ## Validation
 
-Before first product mutation, independently run the repaired baseline:
+Before first product mutation, independently run the repaired source candidate:
 
 ```bash
 dotnet build InterLan.sln -c Release
