@@ -39,6 +39,28 @@ public sealed class ProcessSupervisor : IAsyncDisposable
         }
     }
 
+    public async Task<ManagedProcessExit?> WaitForExitAsync(
+        string component,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(component);
+
+        ManagedChildProcess? child;
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            _children.TryGetValue(component, out child);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+
+        return child is null
+            ? null
+            : await child.WaitForExitAsync(cancellationToken);
+    }
+
     public async Task<ManagedProcessExit?> StopAsync(
         string component,
         TimeSpan timeout,
@@ -148,6 +170,8 @@ public sealed class ProcessSupervisor : IAsyncDisposable
             {
                 _gate.Release();
             }
+
+            await child.DisposeAsync();
         }
         catch (ObjectDisposedException)
         {
