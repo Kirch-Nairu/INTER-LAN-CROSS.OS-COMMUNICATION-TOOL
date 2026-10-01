@@ -1,0 +1,44 @@
+name: CRM S001 Exact Baseline
+
+on:
+  push:
+    branches:
+      - KIRCH-INTERLAN-CRM-S001-BASELINE-VALIDATION
+
+permissions:
+  contents: read
+
+jobs:
+  exact-baseline:
+    name: Exact source / ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact repaired source
+        uses: actions/checkout@v4
+        with:
+          ref: b0bed39e4f1b7bfeb17a65d85383362e74f65b35
+          fetch-depth: 1
+
+      - name: Assert exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          expected="b0bed39e4f1b7bfeb17a65d85383362e74f65b35"
+          printf 'Expected: %s\nActual:   %s\n' "$expected" "$actual"
+          test "$actual" = "$expected"
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore InterLan.sln
+
+      - name: Release build
+        run: dotnet build InterLan.sln --configuration Release --no-restore
+
+      - name: Aggregate SuiteChecks
+        run: dotnet run --project tools/InterLan.SuiteChecks/InterLan.SuiteChecks.csproj --configuration Release --no-build
