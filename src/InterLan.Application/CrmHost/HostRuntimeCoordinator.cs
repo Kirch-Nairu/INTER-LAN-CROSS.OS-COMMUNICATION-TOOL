@@ -107,7 +107,8 @@ public sealed class HostRuntimeCoordinator
                 _stateMachine.TransitionTo(HostRuntimePhase.Degraded);
                 phase = HostRuntimePhase.Degraded;
             }
-            else if (phase == HostRuntimePhase.Degraded && state == RuntimeComponentState.Ready)
+            else if (phase == HostRuntimePhase.Degraded &&
+                     state is RuntimeComponentState.Ready or RuntimeComponentState.Stopped)
             {
                 _stateMachine.TransitionTo(HostRuntimePhase.Ready);
                 phase = HostRuntimePhase.Ready;

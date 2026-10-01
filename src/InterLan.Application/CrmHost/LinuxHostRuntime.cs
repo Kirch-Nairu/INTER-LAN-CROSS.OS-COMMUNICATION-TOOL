@@ -1,6 +1,9 @@
 namespace InterLan.Application.CrmHost;
 
-public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
+public sealed class LinuxHostRuntime :
+    IHostRuntimeOperations,
+    IRemoteAccessHostOperations,
+    IAsyncDisposable
 {
     private readonly HostRuntimeOptions _options;
     private readonly string _serverAssemblyPath;
@@ -33,6 +36,9 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
     }
 
     public HostRuntimeSnapshot Snapshot => _coordinator.Snapshot;
+
+    public TunnelRuntimeState RemoteAccessState =>
+        _remoteAccess?.State ?? TunnelRuntimeState.Disabled;
 
     public async Task<HostRuntimeSnapshot> StartAsync(
         bool remoteAccess,
@@ -67,24 +73,25 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
                 cancellationToken);
 
             _lease = SingleInstanceLease.Acquire(effectiveOptions.Paths.LockFilePath);
-            _coordinator.BeginStart(effectiveOptions.LocalGatewayUri, DateTimeOffset.UtcNow);
-
-            await _events.PublishAsync(
-                new HostLifecycleEvent(
-                    HostLifecycleEventKind.LeaseAcquired,
-                    DateTimeOffset.UtcNow,
-                    "Canonical host single-instance lease acquired."),
-                cancellationToken);
-
-            _supervisor = new ProcessSupervisor();
-            _processes = new HostProcessSet(
-                _supervisor,
-                effectiveOptions,
-                _serverAssemblyPath,
-                _events);
 
             try
             {
+                _coordinator.BeginStart(effectiveOptions.LocalGatewayUri, DateTimeOffset.UtcNow);
+
+                await _events.PublishAsync(
+                    new HostLifecycleEvent(
+                        HostLifecycleEventKind.LeaseAcquired,
+                        DateTimeOffset.UtcNow,
+                        "Canonical host single-instance lease acquired."),
+                    cancellationToken);
+
+                _supervisor = new ProcessSupervisor();
+                _processes = new HostProcessSet(
+                    _supervisor,
+                    effectiveOptions,
+                    _serverAssemblyPath,
+                    _events);
+
                 await _processes.StartBackendAsync(cancellationToken);
                 await WaitForBackendAsync(effectiveOptions, cancellationToken);
 
@@ -98,11 +105,7 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
                 Uri? publicUri = null;
                 if (remoteAccess)
                 {
-                    _remoteAccess = new RemoteAccessCoordinator(
-                        effectiveOptions,
-                        _supervisor,
-                        _network,
-                        _events);
+                    _remoteAccess = CreateRemoteAccessCoordinator(effectiveOptions);
                     var tunnel = await _remoteAccess.StartAsync(cancellationToken);
                     if (tunnel.Phase == TunnelRuntimePhase.Connected)
                     {
@@ -115,8 +118,7 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
                     publicUri,
                     DateTimeOffset.UtcNow);
 
-                var processIds = await _processes.SnapshotAsync(cancellationToken);
-                await _stateStore.WriteAsync(snapshot, processIds, cancellationToken);
+                await PersistRuntimeStateAsync(cancellationToken);
 
                 await _events.PublishAsync(
                     new HostLifecycleEvent(
@@ -129,7 +131,11 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _coordinator.MarkFaulted($"Host startup failed: {ex.Message}", DateTimeOffset.UtcNow);
+                if (Snapshot.Phase == HostRuntimePhase.Starting)
+                {
+                    _coordinator.MarkFaulted($"Host startup failed: {ex.Message}", DateTimeOffset.UtcNow);
+                }
+
                 await CleanupAfterFailureAsync();
                 throw;
             }
@@ -191,6 +197,91 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
         }
     }
 
+    public async Task<TunnelRuntimeState> EnableRemoteAccessAsync(CancellationToken cancellationToken = default)
+    {
+        if (Snapshot.Phase == HostRuntimePhase.Stopped)
+        {
+            await StartAsync(remoteAccess: true, cancellationToken);
+            return RemoteAccessState;
+        }
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfDisposed();
+            EnsureHostAcceptsRemoteMutation();
+            _remoteAccess ??= CreateRemoteAccessCoordinator(_options with { RemoteAccessEnabled = true });
+            var tunnel = await _remoteAccess.StartAsync(cancellationToken);
+            ApplyTunnelState(tunnel);
+            await PersistRuntimeStateAsync(cancellationToken);
+            return tunnel;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<TunnelRuntimeState> RestartRemoteAccessAsync(CancellationToken cancellationToken = default)
+    {
+        if (Snapshot.Phase == HostRuntimePhase.Stopped)
+        {
+            await StartAsync(remoteAccess: true, cancellationToken);
+            return RemoteAccessState;
+        }
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfDisposed();
+            EnsureHostAcceptsRemoteMutation();
+            _remoteAccess ??= CreateRemoteAccessCoordinator(_options with { RemoteAccessEnabled = true });
+            var tunnel = _remoteAccess.State.Phase == TunnelRuntimePhase.Disabled
+                ? await _remoteAccess.StartAsync(cancellationToken)
+                : await _remoteAccess.RestartAsync(cancellationToken);
+            ApplyTunnelState(tunnel);
+            await PersistRuntimeStateAsync(cancellationToken);
+            return tunnel;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<TunnelRuntimeState> DisableRemoteAccessAsync(CancellationToken cancellationToken = default)
+    {
+        if (Snapshot.Phase == HostRuntimePhase.Stopped)
+        {
+            return TunnelRuntimeState.Disabled;
+        }
+
+        await _gate.WaitAsync(cancellationToken);
+        try
+        {
+            ThrowIfDisposed();
+            EnsureHostAcceptsRemoteMutation();
+
+            if (_remoteAccess is not null)
+            {
+                await _remoteAccess.DisposeAsync();
+                _remoteAccess = null;
+            }
+
+            _coordinator.MarkTunnelState(
+                RuntimeComponentState.Stopped,
+                null,
+                "Remote access is disabled; local authority remains ready.",
+                DateTimeOffset.UtcNow);
+            await PersistRuntimeStateAsync(cancellationToken);
+            return TunnelRuntimeState.Disabled;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -206,6 +297,44 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
         }
 
         _gate.Dispose();
+    }
+
+    private RemoteAccessCoordinator CreateRemoteAccessCoordinator(HostRuntimeOptions options)
+    {
+        if (_supervisor is null)
+        {
+            throw new InvalidOperationException("Remote access cannot start without an active host process supervisor.");
+        }
+
+        return new RemoteAccessCoordinator(options, _supervisor, _network, _events);
+    }
+
+    private void ApplyTunnelState(TunnelRuntimeState tunnel)
+    {
+        var componentState = tunnel.Phase switch
+        {
+            TunnelRuntimePhase.Connected => RuntimeComponentState.Ready,
+            TunnelRuntimePhase.Disabled => RuntimeComponentState.Stopped,
+            TunnelRuntimePhase.Failed => RuntimeComponentState.Failed,
+            _ => RuntimeComponentState.Degraded
+        };
+
+        _coordinator.MarkTunnelState(
+            componentState,
+            tunnel.PublicUri,
+            tunnel.Detail ?? "Remote access state changed.",
+            DateTimeOffset.UtcNow);
+    }
+
+    private async Task PersistRuntimeStateAsync(CancellationToken cancellationToken)
+    {
+        if (_processes is null)
+        {
+            return;
+        }
+
+        var processIds = await _processes.SnapshotAsync(cancellationToken);
+        await _stateStore.WriteAsync(Snapshot, processIds, cancellationToken);
     }
 
     private async Task WaitForBackendAsync(
@@ -235,7 +364,13 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
                 await _remoteAccess.DisposeAsync();
                 _remoteAccess = null;
             }
+        }
+        catch
+        {
+        }
 
+        try
+        {
             if (_processes is not null)
             {
                 await _processes.StopAsync(CancellationToken.None);
@@ -244,13 +379,29 @@ public sealed class LinuxHostRuntime : IHostRuntimeOperations, IAsyncDisposable
                 _supervisor = null;
             }
         }
+        catch
+        {
+        }
         finally
         {
             _stateStore.Delete();
             _lease?.Dispose();
             _lease = null;
-            _coordinator.BeginStop(DateTimeOffset.UtcNow);
-            _coordinator.MarkStopped(DateTimeOffset.UtcNow);
+
+            if (Snapshot.Phase == HostRuntimePhase.Faulted)
+            {
+                _coordinator.BeginStop(DateTimeOffset.UtcNow);
+                _coordinator.MarkStopped(DateTimeOffset.UtcNow);
+            }
+        }
+    }
+
+    private void EnsureHostAcceptsRemoteMutation()
+    {
+        if (Snapshot.Phase is not (HostRuntimePhase.Ready or HostRuntimePhase.Degraded))
+        {
+            throw new InvalidOperationException(
+                $"Remote access cannot change while host phase is {Snapshot.Phase}.");
         }
     }
 
