@@ -8,11 +8,13 @@ public sealed class CrmLeadDesktopSession : IAsyncDisposable
     private CrmLeadDesktopSession(
         LinuxHostRuntime runtime,
         LeadRuntimeViewModel viewModel,
-        LeadCommandCenterWindow window)
+        LeadCommandCenterWindow window,
+        HostSuspendResumeCoordinator powerLifecycle)
     {
         Runtime = runtime;
         ViewModel = viewModel;
         Window = window;
+        PowerLifecycle = powerLifecycle;
     }
 
     public LinuxHostRuntime Runtime { get; }
@@ -20,6 +22,8 @@ public sealed class CrmLeadDesktopSession : IAsyncDisposable
     public LeadRuntimeViewModel ViewModel { get; }
 
     public LeadCommandCenterWindow Window { get; }
+
+    public HostSuspendResumeCoordinator PowerLifecycle { get; }
 
     public static CrmLeadDesktopSession Create()
     {
@@ -38,8 +42,9 @@ public sealed class CrmLeadDesktopSession : IAsyncDisposable
             events);
         var viewModel = new LeadRuntimeViewModel(runtime, runtime);
         var window = new LeadCommandCenterWindow(viewModel);
+        var powerLifecycle = new HostSuspendResumeCoordinator(runtime, runtime, events);
 
-        return new CrmLeadDesktopSession(runtime, viewModel, window);
+        return new CrmLeadDesktopSession(runtime, viewModel, window, powerLifecycle);
     }
 
     public async ValueTask DisposeAsync()
