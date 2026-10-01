@@ -55,6 +55,8 @@ public sealed partial class CrmAuthorityStore
     {
         if (next == CrmWorkPackageState.Authorized)
         {
+            if (!current.Source.Verified)
+                throw new InvalidOperationException("A work package cannot be authorized from an unverified source identity.");
             await RequireCountAsync(connection, transaction, "crm_requirements", current.Id, "requirement", cancellationToken);
             await RequireCountAsync(connection, transaction, "crm_deliverables", current.Id, "deliverable", cancellationToken);
             await RequireCountAsync(connection, transaction, "crm_acceptance_criteria", current.Id, "acceptance criterion", cancellationToken);
