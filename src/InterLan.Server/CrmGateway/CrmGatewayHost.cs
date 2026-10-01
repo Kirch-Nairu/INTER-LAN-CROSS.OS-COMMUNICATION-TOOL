@@ -5,7 +5,7 @@ namespace InterLan.Server.CrmGateway;
 
 public static class CrmGatewayHost
 {
-    public const string ModeArgument = "--crm-gateway";
+    public const string ModeArgument = GatewayProcessPlan.ModeArgument;
 
     public static WebApplication Build(string[] args)
     {

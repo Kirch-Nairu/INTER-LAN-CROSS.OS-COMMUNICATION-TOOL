@@ -3,6 +3,8 @@ namespace InterLan.Application.CrmHost;
 public static class GatewayProcessPlan
 {
     public const string ComponentName = "crm-gateway";
+    public const string ModeArgument = "--crm-gateway";
+    public const string HealthPath = "/crm/gateway/health";
 
     public static ProcessLaunchSpec Create(
         string serverAssemblyPath,
@@ -26,7 +28,6 @@ public static class GatewayProcessPlan
             throw new FileNotFoundException("The INTER-LAN server assembly was not found.", assembly);
         }
 
-        var host = localGatewayUri.Host;
         var port = localGatewayUri.Port;
         if (port is <= 0 or > 65535)
         {
@@ -38,9 +39,8 @@ public static class GatewayProcessPlan
             dotnetExecutable,
             [
                 assembly,
-                $"--InterLan:Server:BindAddress={host}",
-                $"--InterLan:Server:Port={port}",
-                "--InterLan:Server:DiscoveryEnabled=false"
+                ModeArgument,
+                $"--CrmGateway:Port={port}"
             ],
             Path.GetDirectoryName(assembly),
             new Dictionary<string, string?>(StringComparer.Ordinal)
