@@ -71,6 +71,7 @@ public sealed class CrmWorkPackage
     public IReadOnlyList<CrmAssignment> Assignments => assignments;
     public IReadOnlyList<CrmCandidateSubmission> Candidates => candidates;
     public IReadOnlyList<CrmCandidateValidation> Validations => validations;
+    public CrmCandidateSubmission? CurrentCandidate => candidates.Count == 0 ? null : candidates[^1];
 
     public static CrmWorkPackage Draft(
         CrmWorkPackageId id,
@@ -161,6 +162,99 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
+    public void SubmitCandidate(
+        CrmCandidateSubmission candidate,
+        Guid actorUserId,
+        CrmStaffRole actorRole,
+        DateTimeOffset now)
+    {
+        if (State != CrmWorkPackageState.Implementing)
+            throw new InvalidOperationException("Candidates may only be submitted while the work package is IMPLEMENTING.");
+
+        CrmCapabilityPolicy.Require(actorRole, CrmCapability.SubmitCandidate);
+        CrmAssignmentPolicy.RequireAssignedImplementationActor(actorUserId, actorRole, Layer, assignments);
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        if (candidate.WorkPackageId != Id)
+            throw new InvalidOperationException("Candidate work-package identity does not match the aggregate.");
+        if (candidate.SourceSha != Source.Sha)
+            throw new InvalidOperationException("Candidate source SHA does not match the authorized source SHA.");
+        if (candidate.Sequence != candidates.Count + 1)
+            throw new InvalidOperationException("Candidate sequence must be append-only and contiguous.");
+        if (candidates.Any(existing =>
+                existing.CandidateId == candidate.CandidateId ||
+                existing.CandidateSha == candidate.CandidateSha))
+        {
+            throw new InvalidOperationException("Candidate identity or SHA has already been submitted.");
+        }
+
+        candidates.Add(candidate);
+        State = CrmWorkPackageState.CandidateSubmitted;
+        Touch(now);
+    }
+
+    public void RecordValidation(
+        CrmCandidateValidation validation,
+        CrmStaffRole actorRole,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(validation);
+        var candidate = RequireCurrentCandidate(validation.CandidateId, validation.CandidateSha);
+
+        switch (validation.Gate)
+        {
+            case CrmValidationGate.Ci:
+                CrmCapabilityPolicy.Require(actorRole, CrmCapability.RecordCiValidation);
+                if (State != CrmWorkPackageState.CiRunning)
+                    throw new InvalidOperationException("CI result requires the work package to be CI_RUNNING.");
+                if (validation.Result == CrmValidationResult.Running)
+                    throw new InvalidOperationException("A recorded CI result must be terminal PASS or FAIL.");
+                validations.Add(validation);
+                State = validation.Result == CrmValidationResult.Passed
+                    ? CrmWorkPackageState.CiPassed
+                    : CrmWorkPackageState.CiFailed;
+                break;
+
+            case CrmValidationGate.Qa:
+                CrmCapabilityPolicy.Require(actorRole, CrmCapability.RecordQaValidation);
+                if (State != CrmWorkPackageState.QaRunning)
+                    throw new InvalidOperationException("QA result requires the work package to be QA_RUNNING.");
+                if (validation.Result == CrmValidationResult.Running)
+                    throw new InvalidOperationException("A recorded QA result must be terminal PASS or FAIL.");
+                RequireGatePass(candidate, CrmValidationGate.Ci);
+                validations.Add(validation);
+                State = validation.Result == CrmValidationResult.Passed
+                    ? CrmWorkPackageState.QaPassed
+                    : CrmWorkPackageState.QaFailed;
+                break;
+
+            default:
+                throw new InvalidOperationException("Lead disposition is recorded by the explicit lead transition path.");
+        }
+
+        Touch(now);
+    }
+
+    public void RecordAcceptedSha(
+        Guid candidateId,
+        CrmGitSha candidateSha,
+        CrmStaffRole actorRole,
+        DateTimeOffset now)
+    {
+        CrmCapabilityPolicy.Require(actorRole, CrmCapability.LeadDisposition);
+        if (State != CrmWorkPackageState.LeadAccepted)
+            throw new InvalidOperationException("Accepted SHA may only be recorded after LEAD_ACCEPTED.");
+
+        var candidate = RequireCurrentCandidate(candidateId, candidateSha);
+        if (ValidationPolicy.CiRequired)
+            RequireGatePass(candidate, CrmValidationGate.Ci);
+        if (ValidationPolicy.QaRequired)
+            RequireGatePass(candidate, CrmValidationGate.Qa);
+
+        AcceptedSha = candidate.CandidateSha;
+        Touch(now);
+    }
+
     public void Transition(
         CrmWorkPackageState next,
         Guid actorUserId,
@@ -189,8 +283,53 @@ public sealed class CrmWorkPackage
                 assignments);
         }
 
+        if (next == CrmWorkPackageState.QaPending && ValidationPolicy.CiRequired)
+            RequireGatePass(RequireCurrentCandidate(), CrmValidationGate.Ci);
+
+        if (next == CrmWorkPackageState.LeadReview && ValidationPolicy.QaRequired)
+            RequireGatePass(RequireCurrentCandidate(), CrmValidationGate.Qa);
+
+        if (next == CrmWorkPackageState.LeadAccepted)
+        {
+            var candidate = RequireCurrentCandidate();
+            if (ValidationPolicy.CiRequired)
+                RequireGatePass(candidate, CrmValidationGate.Ci);
+            if (ValidationPolicy.QaRequired)
+                RequireGatePass(candidate, CrmValidationGate.Qa);
+        }
+
+        if (next == CrmWorkPackageState.IntegrationAuthorized && AcceptedSha is null)
+            throw new InvalidOperationException("Integration cannot be authorized before an explicit accepted SHA is recorded.");
+
         State = next;
         Touch(now);
+    }
+
+    private CrmCandidateSubmission RequireCurrentCandidate(
+        Guid? candidateId = null,
+        CrmGitSha? candidateSha = null)
+    {
+        var current = CurrentCandidate
+            ?? throw new InvalidOperationException("The work package has no submitted candidate.");
+
+        if (candidateId is { } id && current.CandidateId != id)
+            throw new InvalidOperationException("Validation belongs to a non-current candidate.");
+        if (candidateSha is { } sha && current.CandidateSha != sha)
+            throw new InvalidOperationException("Validation SHA does not match the current candidate SHA.");
+
+        return current;
+    }
+
+    private void RequireGatePass(CrmCandidateSubmission candidate, CrmValidationGate gate)
+    {
+        var passed = validations.Any(validation =>
+            validation.CandidateId == candidate.CandidateId &&
+            validation.CandidateSha == candidate.CandidateSha &&
+            validation.Gate == gate &&
+            validation.Result == CrmValidationResult.Passed);
+
+        if (!passed)
+            throw new InvalidOperationException($"{gate} PASS is required for current candidate {candidate.CandidateSha}.");
     }
 
     private void RequireDefinitionMutable()
