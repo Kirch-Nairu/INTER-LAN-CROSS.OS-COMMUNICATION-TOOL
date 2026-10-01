@@ -3,6 +3,7 @@ namespace InterLan.Domain.Crm;
 public sealed class CrmWorkPackage
 {
     private readonly List<CrmRequirement> requirements = [];
+    private readonly List<CrmDeliverable> deliverables = [];
     private readonly List<CrmAcceptanceCriterion> acceptanceCriteria = [];
     private readonly List<CrmScopeRule> scopeRules = [];
     private readonly List<CrmAssignment> assignments = [];
@@ -66,6 +67,7 @@ public sealed class CrmWorkPackage
     public CrmGitSha? AcceptedSha { get; private set; }
 
     public IReadOnlyList<CrmRequirement> Requirements => requirements;
+    public IReadOnlyList<CrmDeliverable> Deliverables => deliverables;
     public IReadOnlyList<CrmAcceptanceCriterion> AcceptanceCriteria => acceptanceCriteria;
     public IReadOnlyList<CrmScopeRule> ScopeRules => scopeRules;
     public IReadOnlyList<CrmAssignment> Assignments => assignments;
@@ -109,6 +111,17 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
+    public void AddDeliverable(CrmDeliverable deliverable, DateTimeOffset now)
+    {
+        RequireDefinitionMutable();
+        ArgumentNullException.ThrowIfNull(deliverable);
+        if (deliverables.Any(existing => existing.Id == deliverable.Id))
+            throw new InvalidOperationException($"Deliverable {deliverable.Id} already exists.");
+
+        deliverables.Add(deliverable);
+        Touch(now);
+    }
+
     public void AddAcceptanceCriterion(CrmAcceptanceCriterion criterion, DateTimeOffset now)
     {
         RequireDefinitionMutable();
@@ -127,9 +140,7 @@ public sealed class CrmWorkPackage
         if (scopeRules.Any(existing =>
                 existing.Kind == rule.Kind &&
                 string.Equals(existing.Pattern, rule.Pattern, StringComparison.Ordinal)))
-        {
             return;
-        }
 
         var opposite = rule.Kind == CrmScopeKind.Owned ? CrmScopeKind.Prohibited : CrmScopeKind.Owned;
         if (scopeRules.Any(existing =>
@@ -143,11 +154,7 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
-    public void Assign(
-        Guid userId,
-        CrmStaffRole role,
-        Guid assignedByUserId,
-        DateTimeOffset now)
+    public void Assign(Guid userId, CrmStaffRole role, Guid assignedByUserId, DateTimeOffset now)
     {
         if (State is not (CrmWorkPackageState.Draft or CrmWorkPackageState.Authorized))
             throw new InvalidOperationException("Assignments can only change before implementation begins.");
@@ -162,11 +169,7 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
-    public void SubmitCandidate(
-        CrmCandidateSubmission candidate,
-        Guid actorUserId,
-        CrmStaffRole actorRole,
-        DateTimeOffset now)
+    public void SubmitCandidate(CrmCandidateSubmission candidate, Guid actorUserId, CrmStaffRole actorRole, DateTimeOffset now)
     {
         if (State != CrmWorkPackageState.Implementing)
             throw new InvalidOperationException("Candidates may only be submitted while the work package is IMPLEMENTING.");
@@ -181,22 +184,15 @@ public sealed class CrmWorkPackage
             throw new InvalidOperationException("Candidate source SHA does not match the authorized source SHA.");
         if (candidate.Sequence != candidates.Count + 1)
             throw new InvalidOperationException("Candidate sequence must be append-only and contiguous.");
-        if (candidates.Any(existing =>
-                existing.CandidateId == candidate.CandidateId ||
-                existing.CandidateSha == candidate.CandidateSha))
-        {
+        if (candidates.Any(existing => existing.CandidateId == candidate.CandidateId || existing.CandidateSha == candidate.CandidateSha))
             throw new InvalidOperationException("Candidate identity or SHA has already been submitted.");
-        }
 
         candidates.Add(candidate);
         State = CrmWorkPackageState.CandidateSubmitted;
         Touch(now);
     }
 
-    public void RecordValidation(
-        CrmCandidateValidation validation,
-        CrmStaffRole actorRole,
-        DateTimeOffset now)
+    public void RecordValidation(CrmCandidateValidation validation, CrmStaffRole actorRole, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(validation);
         var candidate = RequireCurrentCandidate(validation.CandidateId, validation.CandidateSha);
@@ -210,11 +206,8 @@ public sealed class CrmWorkPackage
                 if (validation.Result == CrmValidationResult.Running)
                     throw new InvalidOperationException("A recorded CI result must be terminal PASS or FAIL.");
                 validations.Add(validation);
-                State = validation.Result == CrmValidationResult.Passed
-                    ? CrmWorkPackageState.CiPassed
-                    : CrmWorkPackageState.CiFailed;
+                State = validation.Result == CrmValidationResult.Passed ? CrmWorkPackageState.CiPassed : CrmWorkPackageState.CiFailed;
                 break;
-
             case CrmValidationGate.Qa:
                 CrmCapabilityPolicy.Require(actorRole, CrmCapability.RecordQaValidation);
                 if (State != CrmWorkPackageState.QaRunning)
@@ -223,11 +216,8 @@ public sealed class CrmWorkPackage
                     throw new InvalidOperationException("A recorded QA result must be terminal PASS or FAIL.");
                 RequireGatePass(candidate, CrmValidationGate.Ci);
                 validations.Add(validation);
-                State = validation.Result == CrmValidationResult.Passed
-                    ? CrmWorkPackageState.QaPassed
-                    : CrmWorkPackageState.QaFailed;
+                State = validation.Result == CrmValidationResult.Passed ? CrmWorkPackageState.QaPassed : CrmWorkPackageState.QaFailed;
                 break;
-
             default:
                 throw new InvalidOperationException("Lead disposition is recorded by the explicit lead transition path.");
         }
@@ -235,11 +225,7 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
-    public void RecordAcceptedSha(
-        Guid candidateId,
-        CrmGitSha candidateSha,
-        CrmStaffRole actorRole,
-        DateTimeOffset now)
+    public void RecordAcceptedSha(Guid candidateId, CrmGitSha candidateSha, CrmStaffRole actorRole, DateTimeOffset now)
     {
         CrmCapabilityPolicy.Require(actorRole, CrmCapability.LeadDisposition);
         if (State != CrmWorkPackageState.LeadAccepted)
@@ -255,11 +241,7 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
-    public void Transition(
-        CrmWorkPackageState next,
-        Guid actorUserId,
-        CrmStaffRole actorRole,
-        DateTimeOffset now)
+    public void Transition(CrmWorkPackageState next, Guid actorUserId, CrmStaffRole actorRole, DateTimeOffset now)
     {
         var capability = CrmTransitionPolicy.RequiredCapability(State, next);
         CrmCapabilityPolicy.Require(actorRole, capability);
@@ -268,6 +250,8 @@ public sealed class CrmWorkPackage
         {
             if (requirements.Count == 0)
                 throw new InvalidOperationException("A work package cannot be authorized without requirements.");
+            if (deliverables.Count == 0)
+                throw new InvalidOperationException("A work package cannot be authorized without deliverables.");
             if (acceptanceCriteria.Count == 0)
                 throw new InvalidOperationException("A work package cannot be authorized without acceptance criteria.");
             if (assignments.Count == 0)
@@ -275,17 +259,10 @@ public sealed class CrmWorkPackage
         }
 
         if (next == CrmWorkPackageState.Implementing)
-        {
-            CrmAssignmentPolicy.RequireAssignedImplementationActor(
-                actorUserId,
-                actorRole,
-                Layer,
-                assignments);
-        }
+            CrmAssignmentPolicy.RequireAssignedImplementationActor(actorUserId, actorRole, Layer, assignments);
 
         if (next == CrmWorkPackageState.QaPending && ValidationPolicy.CiRequired)
             RequireGatePass(RequireCurrentCandidate(), CrmValidationGate.Ci);
-
         if (next == CrmWorkPackageState.LeadReview && ValidationPolicy.QaRequired)
             RequireGatePass(RequireCurrentCandidate(), CrmValidationGate.Qa);
 
@@ -305,18 +282,13 @@ public sealed class CrmWorkPackage
         Touch(now);
     }
 
-    private CrmCandidateSubmission RequireCurrentCandidate(
-        Guid? candidateId = null,
-        CrmGitSha? candidateSha = null)
+    private CrmCandidateSubmission RequireCurrentCandidate(Guid? candidateId = null, CrmGitSha? candidateSha = null)
     {
-        var current = CurrentCandidate
-            ?? throw new InvalidOperationException("The work package has no submitted candidate.");
-
+        var current = CurrentCandidate ?? throw new InvalidOperationException("The work package has no submitted candidate.");
         if (candidateId is { } id && current.CandidateId != id)
             throw new InvalidOperationException("Validation belongs to a non-current candidate.");
         if (candidateSha is { } sha && current.CandidateSha != sha)
             throw new InvalidOperationException("Validation SHA does not match the current candidate SHA.");
-
         return current;
     }
 
@@ -327,7 +299,6 @@ public sealed class CrmWorkPackage
             validation.CandidateSha == candidate.CandidateSha &&
             validation.Gate == gate &&
             validation.Result == CrmValidationResult.Passed);
-
         if (!passed)
             throw new InvalidOperationException($"{gate} PASS is required for current candidate {candidate.CandidateSha}.");
     }
@@ -335,7 +306,7 @@ public sealed class CrmWorkPackage
     private void RequireDefinitionMutable()
     {
         if (State != CrmWorkPackageState.Draft)
-            throw new InvalidOperationException("Requirements, acceptance criteria and scope are immutable after authorization.");
+            throw new InvalidOperationException("Requirements, deliverables, acceptance criteria and scope are immutable after authorization.");
     }
 
     private void Touch(DateTimeOffset now)
