@@ -1,42 +1,81 @@
-# INTER-LAN Engineering Authority
+# INTER-LAN Engineering Authority — Developer Operations CRM Rebaseline
 
 Technical Authority: **Kirch Ivan Balite**
 
-Active implementation phase: **P2 — Direct Messaging + Durable Pairing**
+Branch-local authority applies to:
 
-Accepted predecessor:
+`KIRCH-INTERLAN-DEVELOPER-OPS-CRM-REBASELINE`
 
-`main@91c010dd3bd448fc9bd5ec9159e94262569e3e79`
+Rebaseline source:
 
-Active branch:
+`main@d821536cec77b0b56f16bc6a02b4ffe935dfa8a0`
 
-`KIRCH-INTERLAN-P2-DIRECT-MESSAGING`
+## Current mode
 
-## Execution authority
+**CRM-F00 PRODUCT REBASELINE / DOCUMENTATION ONLY**
 
-Read and obey:
+INTER-LAN is being reoriented from a messaging-first cross-OS communication product into a **local-first Developer Operations Control Plane / Development CRM** for real engineering staff.
 
-1. `00-HANDOFF/INTERLAN_V1_CODE_CAMPAIGN.md`
-2. `00-HANDOFF/INTERLAN_EXECUTION_STATE.md`
-3. `00-HANDOFF/INTERLAN_COMMIT_LEDGER.md`
-4. `00-HANDOFF/INTERLAN_INVARIANTS.md`
-5. `00-HANDOFF/INTERLAN_KNOWN_RISKS.md`
-6. `00-HANDOFF/INTERLAN_FINAL_CICD_CONTRACT.md`
+The Technical Lead is transitioning to Linux. The **Debian KDE workstation is the primary development machine and the canonical INTER-LAN host**.
 
-Where older phase wording conflicts with these active campaign documents, the active campaign documents govern.
+No implementation is authorized by this branch-local authority yet.
 
-## Core laws
+The old P2 messaging campaign and 4x P2 benchmark must not resume on this branch as if the old product target were unchanged.
 
-- The server owner is durable configured authority. It is never inferred from which client is currently connected.
-- Native desktop and web clients share the same server-side authorization contract.
-- Android is a web client in V1 and cannot host the canonical server.
-- Server-only secrets, including Telegram credentials and the server TLS private key, never go to clients.
-- Telegram is archive tier, not realtime transport.
-- Discovery is untrusted information only.
-- Invite/session/device credentials are persisted server-side only as cryptographic hashes.
-- Native clients pin the server certificate fingerprint after explicit pairing.
-- Do not claim E2E encryption while the server can read message payloads.
-- Security, authorization, persistence, and migration regressions stop forward work.
-- P2–P7 target 300+ meaningful atomic commits per phase. No fake commit farming.
-- P2 forward uses normal merges; do not squash accepted phase history.
-- New CI/CD architecture is deferred until P7 code freeze. Local executable verification is not deferred.
+## Read and obey
+
+1. `00-HANDOFF/CRM_F00_PRODUCT_REBASELINE.md`
+2. `docs/CRM_PRODUCT_ARCHITECTURE.md`
+3. `docs/CRM_LINUX_HOST_RUNTIME.md`
+4. `docs/CRM_WORK_PACKAGE_JSON_IMPORT.md`
+5. `docs/CRM_PHASE_CLOSURE_EVIDENCE.md`
+
+Historical P0/P1/P2 campaign documents remain useful evidence about the existing implementation, but they do not override the CRM rebaseline direction on this branch.
+
+## CRM-F00 purpose
+
+Before implementation resumes, CRM-F00 must inventory the existing codebase and classify each relevant component as:
+
+- retain as-is;
+- retain but adapt;
+- retire;
+- replace;
+- unknown pending proof.
+
+A new bounded implementation handoff must then identify an exact green source SHA, owned files, prohibited scope, acceptance criteria and executable validation.
+
+## Product laws
+
+- The Work Package is the central operational unit.
+- Authority precedes implementation.
+- Validation belongs to an exact candidate SHA.
+- Any code change creates a new candidate requiring the applicable revalidation.
+- Implementation, CI/CD, QA and Technical Lead acceptance remain distinct gates.
+- The discovering role does not automatically become the fixing role.
+- Only accepted work is integrated.
+- Closed phases are immutable historical records.
+- Later revisions create new work packages linked to prior closure artifacts.
+- AI/ChatGPT-generated JSON is declarative input data, never automatic shell authority.
+- JSON imports create reviewed drafts before explicit Technical Lead authorization.
+- Required screenshots/evidence are structured records bound to candidate/criteria.
+- Closure generates detailed PDF/HTML/JSON reports plus a checksummed evidence bundle.
+- The Debian KDE host owns canonical local state, native Lead control, artifact generation and tunnel lifecycle.
+- Browser clients are subordinate role-limited staff surfaces.
+- Cloudflare tunnel transport never replaces INTER-LAN authentication/authorization.
+- Technical Lead-only actions should remain local/native where practical.
+- Secrets must not leak into reports, closure bundles or browser clients.
+
+## Implementation stop rule
+
+Do not mutate product code under CRM-F00 documentation authority.
+
+Implementation begins only after a later explicit Code Writer handoff names:
+
+- exact source SHA;
+- exact branch;
+- owned scope;
+- prohibited scope;
+- migration rules;
+- validation commands;
+- acceptance criteria;
+- failure/stop conditions.
