@@ -220,6 +220,7 @@ var baseUri = server.BaseUri;
         try
         {
             await replayHub.StartAsync();
+            await replayHub.InvokeAsync("Ping");
         }
         catch
         {
