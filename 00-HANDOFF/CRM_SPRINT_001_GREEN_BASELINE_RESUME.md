@@ -65,7 +65,7 @@ Therefore, for the resumed Sprint 001 execution:
 5. no writer may claim local execution that did not occur;
 6. the Maintainer exact-source PASS is baseline evidence only and does not substitute for validating new writer changes where validation is available;
 7. any new source defect introduced by a writer belongs to that writer lane and does count as sprint work/rework;
-8. the four pre-sprint bootstrap repairs remain outside both writers' 40-commit counts.
+8. all pre-sprint bootstrap repair commits remain outside both writers' 40-commit counts: the initial `MessageTextPolicy` repair plus Repairs 02, 03, 04, and 05.
 
 ## Sprint counts
 
@@ -81,7 +81,7 @@ Combined target:
 
 `80 substantive sprint CODE commits`
 
-The baseline repair commits do not count toward either target.
+All bootstrap repair commits do not count toward either target.
 
 ## Writer A ownership
 
